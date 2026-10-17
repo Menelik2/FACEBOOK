@@ -1,5 +1,6 @@
 import { UnfollowConfig } from "./types";
 import { getProgressUICode } from "./progress-ui";
+import { getDesktopOnlyGuard } from "./desktop-guard";
 
 export function generateUnfriendScript(config: UnfollowConfig): string {
   const {
@@ -22,6 +23,7 @@ export function generateUnfriendScript(config: UnfollowConfig): string {
   };
   const primary = themeColors[THEME] || themeColors.neon;
   const progressCode = getProgressUICode("FB Auto Unfriend", primary);
+  const desktopGuard = getDesktopOnlyGuard();
 
   return `javascript:(function(){
 if (window.__FB_UNFRIEND_RUNNING__) {
@@ -30,12 +32,13 @@ if (window.__FB_UNFRIEND_RUNNING__) {
 }
 window.__FB_UNFRIEND_RUNNING__ = true;
 
+${desktopGuard}
 ${progressCode}
 
 (async function smartUnfriendLoop() {
   'use strict';
-  console.log('%c[Facebook Auto Unfriend Started]', 'color:${primary};font-weight:bold;');
-  console.log('%cTo stop: window.facebookUnfriendStop() or click Stop on the progress bar', 'color:#FF9800;');
+  console.log('%c[Facebook Auto Unfriend Started — Desktop]', 'color:${primary};font-weight:bold;');
+  console.log('%cTo stop: window.facebookUnfriendStop() or progress panel Stop', 'color:#FF9800;');
 
   const UNFRIEND_DELAY = ${UNFRIEND_DELAY};
   const SCROLL_AMOUNT = ${UNFRIEND_SCROLL_AMOUNT};
@@ -48,25 +51,24 @@ ${progressCode}
   const COOLDOWN_SECONDS = ${COOLDOWN_SECONDS};
 
   let stopRequested = false;
-  window.facebookUnfriendStop = () => {
+  window.facebookUnfriendStop = function() {
     stopRequested = true;
-    console.log('%c[Stop requested]', 'color:#FF5722;font-weight:bold;');
     if (window.__FB_PROGRESS__) window.__FB_PROGRESS__.update({ status: 'Stopping…' });
   };
 
   if (window.__FB_PROGRESS__) {
     window.__FB_PROGRESS__.cap = DAILY_CAP;
-    window.__FB_PROGRESS__.onStop(() => window.facebookUnfriendStop());
+    window.__FB_PROGRESS__.onStop(function() { window.facebookUnfriendStop(); });
     window.__FB_PROGRESS__.update({ status: DRY_RUN ? 'Dry run mode' : 'Running…', cap: DAILY_CAP });
   }
 
-  const delay = (ms) => {
-    let actual = ms;
+  const delay = function(ms) {
+    var actual = ms;
     if (RANDOM_JITTER) {
-      const jitter = ms * 0.2 * (Math.random() * 2 - 1);
+      var jitter = ms * 0.2 * (Math.random() * 2 - 1);
       actual = Math.max(150, Math.round(ms + jitter));
     }
-    return new Promise((res) => setTimeout(res, actual));
+    return new Promise(function(res) { setTimeout(res, actual); });
   };
 
   const processed = new Set();
@@ -77,70 +79,58 @@ ${progressCode}
   const MAX_EMPTY_SCROLLS = 5;
 
   function getProfileKey(btn) {
-    const row = btn.closest('[role="listitem"], [role="article"], div') || btn.parentElement;
-    const link = row && row.querySelector('a[href*="facebook.com/"]');
+    var row = btn.closest('[role="listitem"], [role="article"], div') || btn.parentElement;
+    var link = row && row.querySelector('a[href*="facebook.com/"]');
     if (link && link.href) return link.href.split('?')[0];
-    const text = (row && row.textContent || '').slice(0, 40).trim();
+    var text = (row && row.textContent || '').slice(0, 40).trim();
     return text || ('btn-' + Math.random().toString(36).slice(2));
   }
 
   function syncProgress(status) {
     if (window.__FB_PROGRESS__) {
       window.__FB_PROGRESS__.update({
-        success: successCount,
-        fail: failCount,
-        total: successCount + failCount,
-        status: status || undefined,
+        success: successCount, fail: failCount,
+        total: successCount + failCount, status: status
       });
     }
   }
 
   while (!stopRequested) {
-    const buttons = [...document.querySelectorAll('div[aria-label="Friends"]')];
-    const fresh = buttons.filter((btn) => {
-      const key = getProfileKey(btn);
+    var buttons = [].slice.call(document.querySelectorAll('div[aria-label="Friends"]'));
+    var fresh = buttons.filter(function(btn) {
+      var key = getProfileKey(btn);
       return key && !processed.has(key);
     });
 
     if (fresh.length === 0) {
       emptyScrolls++;
-      syncProgress('Scrolling for more… (' + emptyScrolls + '/' + MAX_EMPTY_SCROLLS + ')');
+      syncProgress('Scrolling… (' + emptyScrolls + '/' + MAX_EMPTY_SCROLLS + ')');
       window.scrollBy(0, SCROLL_AMOUNT);
       await delay(SCROLL_WAIT);
-      const still = document.querySelectorAll('div[aria-label="Friends"]').length;
-      if (still === 0 || emptyScrolls >= MAX_EMPTY_SCROLLS) {
-        console.log('%c✅ Finished', 'color:#4CAF50;font-weight:bold;');
-        break;
-      }
+      if (document.querySelectorAll('div[aria-label="Friends"]').length === 0 || emptyScrolls >= MAX_EMPTY_SCROLLS) break;
       continue;
     }
-
     emptyScrolls = 0;
 
-    for (const btn of fresh) {
+    for (var i = 0; i < fresh.length; i++) {
       if (stopRequested) break;
-      const key = getProfileKey(btn);
+      var btn = fresh[i];
+      var key = getProfileKey(btn);
       processed.add(key);
-      btn.scrollIntoView({ block: "center" });
+      btn.scrollIntoView({ block: 'center' });
       await delay(300);
 
       if (DRY_RUN) {
-        console.log('%c[DRY RUN] Would unfriend: ' + key, 'color:#FFCC00;');
-        successCount++;
-        actionsThisSession++;
+        successCount++; actionsThisSession++;
         syncProgress('Dry run: ' + key.slice(0, 40));
         continue;
       }
 
-      try { btn.click(); } catch (e) {
-        failCount++;
-        syncProgress('Click failed');
-        continue;
-      }
+      try { btn.click(); } catch (e) { failCount++; syncProgress('Click failed'); continue; }
       await delay(SHORT_PAUSE);
 
-      const unfriend = Array.from(document.querySelectorAll('[role="menuitem"]'))
-        .find((e) => /unfriend/i.test(e.innerText || e.textContent || ''));
+      var unfriend = Array.from(document.querySelectorAll('[role="menuitem"]'))
+        .find(function(e) { return /unfriend/i.test(e.innerText || e.textContent || ''); });
 
       if (!unfriend) {
         failCount++;
@@ -153,36 +143,25 @@ ${progressCode}
       unfriend.click();
       await delay(SHORT_PAUSE);
 
-      const confirm = Array.from(
-        document.querySelectorAll('[aria-label="Confirm"], div[role="button"], button')
-      ).find((e) => /confirm/i.test(
-        e.innerText || e.textContent || e.getAttribute('aria-label') || ''
-      ));
-
+      var confirm = Array.from(document.querySelectorAll('[aria-label="Confirm"], div[role="button"], button'))
+        .find(function(e) {
+          return /confirm/i.test(e.innerText || e.textContent || e.getAttribute('aria-label') || '');
+        });
       if (confirm) confirm.click();
-      successCount++;
-      actionsThisSession++;
-      console.log('%c👋 Unfriended (' + successCount + ')', 'color:#4CAF50;');
+      successCount++; actionsThisSession++;
       syncProgress('Unfriended ' + successCount);
 
       if (actionsThisSession > 0 && actionsThisSession % COOLDOWN_EVERY_N === 0) {
         syncProgress('Cooldown ' + COOLDOWN_SECONDS + 's…');
         await delay(COOLDOWN_SECONDS * 1000);
       }
-
-      if (successCount >= DAILY_CAP) {
-        console.log('%c[🛑 Daily cap reached]', 'color:#FF5722;font-weight:bold;');
-        stopRequested = true;
-        break;
-      }
-
+      if (successCount >= DAILY_CAP) { stopRequested = true; break; }
       await delay(UNFRIEND_DELAY);
     }
   }
 
   window.__FB_UNFRIEND_RUNNING__ = false;
-  const summary = '✅ ' + successCount + ' unfriended | ❌ ' + failCount + ' failed';
-  console.log('%c[Summary] ' + summary, 'color:#FFD700;font-weight:bold;');
+  var summary = '✅ ' + successCount + ' unfriended | ❌ ' + failCount + ' failed';
   if (window.__FB_PROGRESS__) window.__FB_PROGRESS__.done(summary);
   else alert('FB Auto Unfriend finished.\\n' + summary);
 })();
@@ -194,16 +173,14 @@ export function generateUnfriendUserscript(config: UnfollowConfig): string {
     .replace(/^javascript:/, "")
     .replace(/^\(function\(\)\{/, "")
     .replace(/\}\)\(\);$/, "");
-
   return `// ==UserScript==
 // @name         FB Auto Unfriend
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.4.0
-// @description  Auto unfriend with live progress bar
+// @version      1.5.0
+// @description  Desktop-only auto unfriend with progress bar
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/*/friends*
 // @match        https://facebook.com/*/friends*
-// @match        https://www.facebook.com/friends/*
 // @grant        none
 // @run-at       document-idle
 // ==/UserScript==
