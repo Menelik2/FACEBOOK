@@ -22,6 +22,11 @@ export const useConfigStore = create<ConfigState>()(
     }),
     {
       name: "fb-unfollow-config",
+      // Merge with defaults so new fields appear after updates
+      merge: (persisted, current) => ({
+        ...current,
+        config: { ...DEFAULT_CONFIG, ...(persisted as any)?.config },
+      }),
     }
   )
 );

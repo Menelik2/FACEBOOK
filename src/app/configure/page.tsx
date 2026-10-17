@@ -3,6 +3,11 @@
 import { useState, useEffect } from "react";
 import { useConfigStore } from "@/store/config-store";
 import { generateScript, generateUserscript, generateRawScript } from "@/lib/generate-script";
+import {
+  generateLeaveGroupsScript,
+  generateLeaveGroupsUserscript,
+  generateLeaveGroupsRaw,
+} from "@/lib/generate-leave-groups";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -17,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Download, Copy, Save, RotateCcw, Check } from "lucide-react";
+import { AppMode } from "@/lib/types";
 
 export default function ConfigurePage() {
   const { config, setConfig, resetConfig } = useConfigStore();
@@ -33,9 +39,17 @@ export default function ConfigurePage() {
     );
   }
 
-  const bookmarklet = generateScript(config);
-  const userscript = generateUserscript(config);
-  const rawScript = generateRawScript(config);
+  const isLeave = config.MODE === "leave-groups";
+
+  const bookmarklet = isLeave
+    ? generateLeaveGroupsScript(config)
+    : generateScript(config);
+  const userscript = isLeave
+    ? generateLeaveGroupsUserscript(config)
+    : generateUserscript(config);
+  const rawScript = isLeave
+    ? generateLeaveGroupsRaw(config)
+    : generateRawScript(config);
   const jsonPreview = JSON.stringify(config, null, 2);
 
   const copy = async (text: string, key: string) => {
@@ -49,7 +63,9 @@ export default function ConfigurePage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "fb-unfollow-bookmarklet.txt";
+    a.download = isLeave
+      ? "fb-leave-groups-bookmarklet.txt"
+      : "fb-unfollow-bookmarklet.txt";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -59,177 +75,327 @@ export default function ConfigurePage() {
       <div>
         <h1 className="text-3xl font-bold">Configure & Generate</h1>
         <p className="text-slate-400 mt-2">
-          Tune the automation parameters. Everything is saved to your browser only.
+          Choose mode, tune parameters, then generate your script. Everything stays in your browser.
         </p>
       </div>
 
+      {/* Mode selector */}
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle>Mode</CardTitle>
+          <CardDescription>What do you want the script to do?</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => setConfig({ MODE: "unfollow" })}
+              className={`p-4 rounded-xl border text-left transition ${
+                config.MODE === "unfollow"
+                  ? "border-blue-500 bg-blue-950/40"
+                  : "border-slate-700 hover:border-slate-500"
+              }`}
+            >
+              <div className="font-semibold">Unfollow people & pages</div>
+              <div className="text-sm text-slate-400 mt-1">
+                Runs on your Following list
+              </div>
+            </button>
+            <button
+              onClick={() => setConfig({ MODE: "leave-groups" })}
+              className={`p-4 rounded-xl border text-left transition ${
+                config.MODE === "leave-groups"
+                  ? "border-purple-500 bg-purple-950/40"
+                  : "border-slate-700 hover:border-slate-500"
+              }`}
+            >
+              <div className="font-semibold">Leave Groups</div>
+              <div className="text-sm text-slate-400 mt-1">
+                Runs on facebook.com/groups/joins
+              </div>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid lg:grid-cols-2 gap-8">
+        {/* Left: Form */}
         <div className="space-y-6">
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle>Timing</CardTitle>
-              <CardDescription>Delays between actions (higher = safer)</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <div className="flex justify-between mb-2">
-                  <Label>Interval between profiles</Label>
-                  <span className="text-sm text-slate-400">{config.INTERVAL_BETWEEN_ACTIONS} ms</span>
-                </div>
-                <Slider
-                  value={[config.INTERVAL_BETWEEN_ACTIONS]}
-                  min={1000}
-                  max={10000}
-                  step={100}
-                  onValueChange={([v]) => setConfig({ INTERVAL_BETWEEN_ACTIONS: v })}
-                />
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <Label>Short pause (sub-actions)</Label>
-                  <span className="text-sm text-slate-400">{config.SHORT_FIXED_PAUSE} ms</span>
-                </div>
-                <Slider
-                  value={[config.SHORT_FIXED_PAUSE]}
-                  min={300}
-                  max={2000}
-                  step={50}
-                  onValueChange={([v]) => setConfig({ SHORT_FIXED_PAUSE: v })}
-                />
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <Label>Hover card wait timeout</Label>
-                  <span className="text-sm text-slate-400">{config.HOVER_WAIT_TIMEOUT} ms</span>
-                </div>
-                <Slider
-                  value={[config.HOVER_WAIT_TIMEOUT]}
-                  min={2000}
-                  max={10000}
-                  step={100}
-                  onValueChange={([v]) => setConfig({ HOVER_WAIT_TIMEOUT: v })}
-                />
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <Label>Max scroll attempts</Label>
-                  <span className="text-sm text-slate-400">{config.MAX_SCROLL_ATTEMPTS}</span>
-                </div>
-                <Slider
-                  value={[config.MAX_SCROLL_ATTEMPTS]}
-                  min={1}
-                  max={10}
-                  step={1}
-                  onValueChange={([v]) => setConfig({ MAX_SCROLL_ATTEMPTS: v })}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          {isLeave ? (
+            <>
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader>
+                  <CardTitle>Leave Groups – Timing</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Max leaves per minute</Label>
+                      <span className="text-sm text-slate-400">{config.MAX_PER_MINUTE}</span>
+                    </div>
+                    <Slider
+                      value={[config.MAX_PER_MINUTE]}
+                      min={5}
+                      max={40}
+                      step={1}
+                      onValueChange={([v]) => setConfig({ MAX_PER_MINUTE: v })}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Base delay (ms)</Label>
+                      <span className="text-sm text-slate-400">{config.BASE_DELAY}</span>
+                    </div>
+                    <Slider
+                      value={[config.BASE_DELAY]}
+                      min={400}
+                      max={3000}
+                      step={50}
+                      onValueChange={([v]) => setConfig({ BASE_DELAY: v })}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Jitter (ms)</Label>
+                      <span className="text-sm text-slate-400">{config.JITTER}</span>
+                    </div>
+                    <Slider
+                      value={[config.JITTER]}
+                      min={0}
+                      max={1500}
+                      step={50}
+                      onValueChange={([v]) => setConfig({ JITTER: v })}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Scroll distance (px)</Label>
+                      <span className="text-sm text-slate-400">{config.SCROLL_DISTANCE}</span>
+                    </div>
+                    <Slider
+                      value={[config.SCROLL_DISTANCE]}
+                      min={800}
+                      max={4000}
+                      step={100}
+                      onValueChange={([v]) => setConfig({ SCROLL_DISTANCE: v })}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Wait when no more groups (ms)</Label>
+                      <span className="text-sm text-slate-400">{config.SCROLL_DELAY_ON_EMPTY}</span>
+                    </div>
+                    <Slider
+                      value={[config.SCROLL_DELAY_ON_EMPTY]}
+                      min={2000}
+                      max={15000}
+                      step={500}
+                      onValueChange={([v]) => setConfig({ SCROLL_DELAY_ON_EMPTY: v })}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle>Behavior</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="unlike">Also unlike pages</Label>
-                <Switch
-                  id="unlike"
-                  checked={config.ALSO_UNLIKE_PAGES}
-                  onCheckedChange={(v) => setConfig({ ALSO_UNLIKE_PAGES: v })}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="dry">Dry run (log only, no clicks)</Label>
-                <Switch
-                  id="dry"
-                  checked={config.DRY_RUN}
-                  onCheckedChange={(v) => setConfig({ DRY_RUN: v })}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="jitter">Random jitter (±20%)</Label>
-                <Switch
-                  id="jitter"
-                  checked={config.RANDOM_JITTER}
-                  onCheckedChange={(v) => setConfig({ RANDOM_JITTER: v })}
-                />
-              </div>
-              <div>
-                <Label>Target</Label>
-                <Select
-                  value={config.TARGET}
-                  onValueChange={(v: "all" | "profiles" | "pages") => setConfig({ TARGET: v })}
-                >
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All (profiles + pages)</SelectItem>
-                    <SelectItem value="profiles">Profiles only</SelectItem>
-                    <SelectItem value="pages">Pages only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Log theme</Label>
-                <Select
-                  value={config.THEME}
-                  onValueChange={(v: "neon" | "minimal" | "retro") => setConfig({ THEME: v })}
-                >
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="neon">Neon</SelectItem>
-                    <SelectItem value="minimal">Minimal</SelectItem>
-                    <SelectItem value="retro">Retro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader>
+                  <CardTitle>Behavior</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="dry">Dry run (log only, no clicks)</Label>
+                    <Switch
+                      id="dry"
+                      checked={config.DRY_RUN}
+                      onCheckedChange={(v) => setConfig({ DRY_RUN: v })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Log theme</Label>
+                    <Select
+                      value={config.THEME}
+                      onValueChange={(v: "neon" | "minimal" | "retro") => setConfig({ THEME: v })}
+                    >
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="neon">Neon</SelectItem>
+                        <SelectItem value="minimal">Minimal</SelectItem>
+                        <SelectItem value="retro">Retro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <>
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader>
+                  <CardTitle>Timing</CardTitle>
+                  <CardDescription>Delays between actions (higher = safer)</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Interval between profiles</Label>
+                      <span className="text-sm text-slate-400">{config.INTERVAL_BETWEEN_ACTIONS} ms</span>
+                    </div>
+                    <Slider
+                      value={[config.INTERVAL_BETWEEN_ACTIONS]}
+                      min={1000}
+                      max={10000}
+                      step={100}
+                      onValueChange={([v]) => setConfig({ INTERVAL_BETWEEN_ACTIONS: v })}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Short pause (sub-actions)</Label>
+                      <span className="text-sm text-slate-400">{config.SHORT_FIXED_PAUSE} ms</span>
+                    </div>
+                    <Slider
+                      value={[config.SHORT_FIXED_PAUSE]}
+                      min={300}
+                      max={2000}
+                      step={50}
+                      onValueChange={([v]) => setConfig({ SHORT_FIXED_PAUSE: v })}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Hover card wait timeout</Label>
+                      <span className="text-sm text-slate-400">{config.HOVER_WAIT_TIMEOUT} ms</span>
+                    </div>
+                    <Slider
+                      value={[config.HOVER_WAIT_TIMEOUT]}
+                      min={2000}
+                      max={10000}
+                      step={100}
+                      onValueChange={([v]) => setConfig({ HOVER_WAIT_TIMEOUT: v })}
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <Label>Max scroll attempts</Label>
+                      <span className="text-sm text-slate-400">{config.MAX_SCROLL_ATTEMPTS}</span>
+                    </div>
+                    <Slider
+                      value={[config.MAX_SCROLL_ATTEMPTS]}
+                      min={1}
+                      max={10}
+                      step={1}
+                      onValueChange={([v]) => setConfig({ MAX_SCROLL_ATTEMPTS: v })}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle>Limits & Cooldowns</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Daily cap (max unfollows)</Label>
-                <Input
-                  type="number"
-                  min={50}
-                  max={2000}
-                  value={config.DAILY_CAP}
-                  onChange={(e) => setConfig({ DAILY_CAP: Number(e.target.value) || 500 })}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label>Cooldown every N actions</Label>
-                <Input
-                  type="number"
-                  min={5}
-                  max={100}
-                  value={config.COOLDOWN_EVERY_N}
-                  onChange={(e) => setConfig({ COOLDOWN_EVERY_N: Number(e.target.value) || 20 })}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label>Cooldown length (seconds)</Label>
-                <Input
-                  type="number"
-                  min={5}
-                  max={120}
-                  value={config.COOLDOWN_SECONDS}
-                  onChange={(e) => setConfig({ COOLDOWN_SECONDS: Number(e.target.value) || 20 })}
-                  className="mt-1.5"
-                />
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader>
+                  <CardTitle>Behavior</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="unlike">Also unlike pages</Label>
+                    <Switch
+                      id="unlike"
+                      checked={config.ALSO_UNLIKE_PAGES}
+                      onCheckedChange={(v) => setConfig({ ALSO_UNLIKE_PAGES: v })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="dry2">Dry run (log only, no clicks)</Label>
+                    <Switch
+                      id="dry2"
+                      checked={config.DRY_RUN}
+                      onCheckedChange={(v) => setConfig({ DRY_RUN: v })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="jitter">Random jitter (±20%)</Label>
+                    <Switch
+                      id="jitter"
+                      checked={config.RANDOM_JITTER}
+                      onCheckedChange={(v) => setConfig({ RANDOM_JITTER: v })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Target</Label>
+                    <Select
+                      value={config.TARGET}
+                      onValueChange={(v: "all" | "profiles" | "pages") => setConfig({ TARGET: v })}
+                    >
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All (profiles + pages)</SelectItem>
+                        <SelectItem value="profiles">Profiles only</SelectItem>
+                        <SelectItem value="pages">Pages only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Log theme</Label>
+                    <Select
+                      value={config.THEME}
+                      onValueChange={(v: "neon" | "minimal" | "retro") => setConfig({ THEME: v })}
+                    >
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="neon">Neon</SelectItem>
+                        <SelectItem value="minimal">Minimal</SelectItem>
+                        <SelectItem value="retro">Retro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-slate-900 border-slate-800">
+                <CardHeader>
+                  <CardTitle>Limits & Cooldowns</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label>Daily cap (max unfollows)</Label>
+                    <Input
+                      type="number"
+                      min={50}
+                      max={2000}
+                      value={config.DAILY_CAP}
+                      onChange={(e) => setConfig({ DAILY_CAP: Number(e.target.value) || 500 })}
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label>Cooldown every N actions</Label>
+                    <Input
+                      type="number"
+                      min={5}
+                      max={100}
+                      value={config.COOLDOWN_EVERY_N}
+                      onChange={(e) => setConfig({ COOLDOWN_EVERY_N: Number(e.target.value) || 20 })}
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label>Cooldown length (seconds)</Label>
+                    <Input
+                      type="number"
+                      min={5}
+                      max={120}
+                      value={config.COOLDOWN_SECONDS}
+                      onChange={(e) => setConfig({ COOLDOWN_SECONDS: Number(e.target.value) || 20 })}
+                      className="mt-1.5"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           <div className="flex gap-3">
             <Button className="flex-1 bg-blue-600 hover:bg-blue-700">
@@ -241,6 +407,7 @@ export default function ConfigurePage() {
           </div>
         </div>
 
+        {/* Right: Preview + Actions */}
         <div className="space-y-6">
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader>
@@ -256,7 +423,11 @@ export default function ConfigurePage() {
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader>
               <CardTitle>Generate</CardTitle>
-              <CardDescription>Pick your preferred install method</CardDescription>
+              <CardDescription>
+                {isLeave
+                  ? "Run on facebook.com/groups/joins"
+                  : "Run on your Following list"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-2">
@@ -264,7 +435,9 @@ export default function ConfigurePage() {
                 <div className="flex gap-2">
                   <a
                     href={bookmarklet}
-                    className="flex-1 inline-flex items-center justify-center h-10 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-sm font-medium"
+                    className={`flex-1 inline-flex items-center justify-center h-10 px-4 rounded-md text-sm font-medium ${
+                      isLeave ? "bg-purple-600 hover:bg-purple-700" : "bg-blue-600 hover:bg-blue-700"
+                    }`}
                     onClick={(e) => e.preventDefault()}
                     draggable
                   >
@@ -306,9 +479,20 @@ export default function ConfigurePage() {
 
           <Card className="bg-amber-950/30 border-amber-800/50">
             <CardContent className="pt-6 text-sm text-amber-200">
-              <strong>Tip:</strong> Always start with <code className="bg-slate-900 px-1 rounded">DRY_RUN = true</code>{" "}
-              and open the browser console (F12) to verify the script finds profiles before turning
-              clicks on.
+              {isLeave ? (
+                <>
+                  <strong>How to use:</strong> Go to{" "}
+                  <code className="bg-slate-900 px-1 rounded">facebook.com/groups/joins</code>, then
+                  click the bookmarklet. To stop: open console and run{" "}
+                  <code className="bg-slate-900 px-1 rounded">window.facebookAutoLeaveStop()</code>.
+                </>
+              ) : (
+                <>
+                  <strong>Tip:</strong> Always start with{" "}
+                  <code className="bg-slate-900 px-1 rounded">DRY_RUN = true</code> and open the
+                  browser console (F12) first.
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
