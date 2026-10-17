@@ -59,69 +59,108 @@ window.__FB_UNFRIEND_RUNNING__ = true;
     return new Promise((res) => setTimeout(res, actual));
   };
 
+  // Track by profile URL (stable across re-renders), not DOM nodes
   const processed = new Set();
   let successCount = 0;
   let failCount = 0;
   let actionsThisSession = 0;
+  let emptyScrolls = 0;
+  const MAX_EMPTY_SCROLLS = 5;
+
+  function getProfileKey(btn) {
+    // Prefer nearby profile link href as stable id
+    const row = btn.closest('[role="listitem"], [role="article"], div') || btn.parentElement;
+    const link = row && row.querySelector('a[href*="facebook.com/"]');
+    if (link && link.href) return link.href.split('?')[0];
+    // Fallback: use a hash of button position + nearby text
+    const text = (row && row.textContent || '').slice(0, 40).trim();
+    return text || ('btn-' + Math.random().toString(36).slice(2));
+  }
 
   while (!stopRequested) {
-    const buttons = [...document.querySelectorAll('div[aria-label="Friends"]')]
-      .filter((btn) => !processed.has(btn));
+    const buttons = [...document.querySelectorAll('div[aria-label="Friends"]')];
 
-    if (buttons.length === 0) {
+    // Filter to ones we haven't processed yet
+    const fresh = buttons.filter((btn) => {
+      const key = getProfileKey(btn);
+      return key && !processed.has(key);
+    });
+
+    if (fresh.length === 0) {
+      emptyScrolls++;
       window.scrollBy(0, SCROLL_AMOUNT);
       await delay(SCROLL_WAIT);
 
-      if (document.querySelectorAll('div[aria-label="Friends"]').length === 0) {
-        console.log('%c✅ All done! Looks like you’ve unfriended everyone visible.', 'color:#4CAF50;font-weight:bold;');
+      // Re-check after scroll
+      const still = document.querySelectorAll('div[aria-label="Friends"]').length;
+      if (still === 0 || emptyScrolls >= MAX_EMPTY_SCROLLS) {
+        console.log('%c✅ Finished — no more Friends buttons found (or max empty scrolls reached).', 'color:#4CAF50;font-weight:bold;');
         break;
       }
       continue;
     }
 
-    for (const btn of buttons) {
+    emptyScrolls = 0; // reset when we find work
+
+    for (const btn of fresh) {
       if (stopRequested) break;
-      processed.add(btn);
+
+      const key = getProfileKey(btn);
+      processed.add(key);
+
       btn.scrollIntoView({ block: "center" });
       await delay(300);
 
       if (DRY_RUN) {
-        console.log('%c[DRY RUN] Would unfriend a person', 'color:#FFCC00;');
+        console.log('%c[DRY RUN] Would unfriend: ' + key, 'color:#FFCC00;');
         successCount++;
         actionsThisSession++;
         continue;
       }
 
-      // open the dropdown
-      btn.click();
+      // Open the Friends dropdown
+      try {
+        btn.click();
+      } catch (e) {
+        failCount++;
+        console.warn('[❌] Click failed', e);
+        continue;
+      }
       await delay(SHORT_PAUSE);
 
-      // find “Unfriend” in the menu
+      // Find “Unfriend” in the menu
       const unfriend = Array.from(document.querySelectorAll('[role="menuitem"]'))
-        .find((e) => (e.innerText || e.textContent || '').includes("Unfriend"));
+        .find((e) => /unfriend/i.test(e.innerText || e.textContent || ''));
 
-      if (unfriend) {
-        unfriend.click();
-        await delay(SHORT_PAUSE);
-
-        // confirm the popup if it appears
-        const confirm = Array.from(document.querySelectorAll('[aria-label="Confirm"], div[role="button"], button'))
-          .find((e) => /confirm/i.test(e.innerText || e.textContent || e.getAttribute('aria-label') || ''));
-
-        if (confirm) {
-          confirm.click();
-          successCount++;
-          actionsThisSession++;
-          console.log('%c👋 Unfriended (' + successCount + ')', 'color:#4CAF50;');
-        } else {
-          // Some UIs unfriend immediately without confirm
-          successCount++;
-          actionsThisSession++;
-          console.log('%c👋 Unfriended (no confirm) (' + successCount + ')', 'color:#4CAF50;');
-        }
-      } else {
+      if (!unfriend) {
         failCount++;
-        console.warn('[❌] Unfriend option not found');
+        console.warn('[❌] Unfriend option not found for', key);
+        // Close any open menu by pressing Escape
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await delay(200);
+        continue;
+      }
+
+      unfriend.click();
+      await delay(SHORT_PAUSE);
+
+      // Confirm dialog if present
+      const confirm = Array.from(
+        document.querySelectorAll('[aria-label="Confirm"], div[role="button"], button')
+      ).find((e) => /confirm/i.test(
+        e.innerText || e.textContent || e.getAttribute('aria-label') || ''
+      ));
+
+      if (confirm) {
+        confirm.click();
+        successCount++;
+        actionsThisSession++;
+        console.log('%c👋 Unfriended (' + successCount + ') — ' + key, 'color:#4CAF50;');
+      } else {
+        // Some UIs unfriend without a confirm step
+        successCount++;
+        actionsThisSession++;
+        console.log('%c👋 Unfriended (no confirm) (' + successCount + ')', 'color:#4CAF50;');
       }
 
       // Cooldown
@@ -156,7 +195,7 @@ export function generateUnfriendUserscript(config: UnfollowConfig): string {
   return `// ==UserScript==
 // @name         FB Auto Unfriend
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.3.0
+// @version      1.3.1
 // @description  Auto unfriend tool generated by FB Unfollow Studio
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/*/friends*
