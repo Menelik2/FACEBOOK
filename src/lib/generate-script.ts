@@ -1,4 +1,5 @@
 import { UnfollowConfig } from "./types";
+import { getProgressUICode } from "./progress-ui";
 
 export function generateScript(config: UnfollowConfig): string {
   const {
@@ -22,15 +23,17 @@ export function generateScript(config: UnfollowConfig): string {
     retro: { primary: "#FF6B6B", success: "#4ECDC4", warn: "#FFE66D", info: "#95E1D3" },
   };
   const colors = themeColors[THEME] || themeColors.neon;
+  const progressCode = getProgressUICode("FB Auto Unfollow", colors.primary);
 
   return `javascript:(function(){
 if (window.__FB_UNFOLLOW_RUNNING__) { alert('FB Unfollow Studio is already running'); return; }
 window.__FB_UNFOLLOW_RUNNING__ = true;
 
+${progressCode}
+
 (async function () {
   'use strict';
   console.log('%c[Facebook Auto Unfollow Script Started]', 'color:#1877F2;font-weight:bold;');
-  console.log('%cConfig: interval=${INTERVAL_BETWEEN_ACTIONS}ms | dryRun=${DRY_RUN} | target=${TARGET}', 'color:#888;');
 
   const INTERVAL_BETWEEN_ACTIONS = ${INTERVAL_BETWEEN_ACTIONS};
   const SHORT_FIXED_PAUSE = ${SHORT_FIXED_PAUSE};
@@ -51,35 +54,43 @@ window.__FB_UNFOLLOW_RUNNING__ = true;
   let processActive = true;
   let actionsThisSession = 0;
 
-  // ===== Mobile detection =====
-  const isMobile = (() => {
-    const ua = navigator.userAgent || '';
-    const host = window.location.hostname || '';
-    return host.startsWith('m.') ||
-           host.includes('m.facebook') ||
-           /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
-           ('ontouchstart' in window && window.innerWidth < 900);
-  })();
-
-  if (isMobile) {
-    console.log('%c[📱 Mobile mode detected]', 'color:#9C27B0;font-weight:bold;', 'Using touch-based flow + mobile selectors');
-  } else {
-    console.log('%c[🖥️ Desktop mode]', 'color:#2196F3;');
+  function syncProgress(status) {
+    if (window.__FB_PROGRESS__) {
+      window.__FB_PROGRESS__.update({
+        success: successCount, fail: failCount,
+        total: successCount + failCount, status: status
+      });
+    }
   }
 
-  const wait = (ms) => {
-    let actual = ms;
+  if (window.__FB_PROGRESS__) {
+    window.__FB_PROGRESS__.cap = DAILY_CAP;
+    window.__FB_PROGRESS__.onStop(function() { processActive = false; syncProgress('Stopping…'); });
+    window.__FB_PROGRESS__.update({ status: DRY_RUN ? 'Dry run mode' : 'Running…', cap: DAILY_CAP });
+  }
+
+  const isMobile = (function() {
+    var ua = navigator.userAgent || '';
+    var host = window.location.hostname || '';
+    return host.startsWith('m.') || host.indexOf('m.facebook') !== -1 ||
+      /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
+      ('ontouchstart' in window && window.innerWidth < 900);
+  })();
+
+  const wait = function(ms) {
+    var actual = ms;
     if (RANDOM_JITTER) {
-      const jitter = ms * 0.2 * (Math.random() * 2 - 1);
+      var jitter = ms * 0.2 * (Math.random() * 2 - 1);
       actual = Math.max(100, Math.round(ms + jitter));
     }
-    return new Promise((resolve) => setTimeout(resolve, actual));
+    return new Promise(function(resolve) { setTimeout(resolve, actual); });
   };
 
-  async function waitForElement(selector, timeout = HOVER_WAIT_TIMEOUT) {
-    const start = Date.now();
+  async function waitForElement(selector, timeout) {
+    timeout = timeout || HOVER_WAIT_TIMEOUT;
+    var start = Date.now();
     while (Date.now() - start < timeout) {
-      const el = document.querySelector(selector);
+      var el = document.querySelector(selector);
       if (el) return el;
       await wait(100);
     }
@@ -93,321 +104,170 @@ window.__FB_UNFOLLOW_RUNNING__ = true;
     return true;
   }
 
-  // Simulate a real user tap/click
   function simulateTap(el) {
     if (!el) return;
     try {
-      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' }));
-      el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'touch' }));
-      el.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
       el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    } catch (e) {
-      // Fallback for older browsers
-      el.click();
-    }
+    } catch (e) { el.click(); }
   }
 
   async function tryUnfollowMobile(profileEl, profileUrl) {
-    if (DRY_RUN) {
-      console.log('%c[DRY RUN] Would unfollow (mobile): ' + profileUrl, 'color:#FFCC00;');
-      return true;
-    }
-
-    // On mobile the "Following" button is often directly visible next to the name
-    const followingBtn =
-      profileEl.querySelector('[aria-label="Following"], [aria-label="Liked"], [aria-label="Favorites"]') ||
-      Array.from(profileEl.querySelectorAll('div[role="button"], span, a')).find(el =>
-        /^(Following|Liked|Favorites)$/i.test((el.textContent || '').trim())
-      );
-
+    if (DRY_RUN) return true;
+    var followingBtn =
+      profileEl.querySelector('[aria-label="Following"], [aria-label="Liked"]') ||
+      Array.from(profileEl.querySelectorAll('div[role="button"]')).find(function(el) {
+        return /^(Following|Liked)$/i.test((el.textContent || '').trim());
+      });
     if (followingBtn) {
-      console.log('%c[📱 Mobile] Tapping Following button...', 'color:#9C27B0;');
       simulateTap(followingBtn);
       await wait(SHORT_FIXED_PAUSE + 400);
-
-      // Look for Unfollow option in the bottom sheet / dialog
-      const unfollowOption = await waitForElement(
-        '[role="menuitem"], [role="button"], div[data-action-id]',
-        4000
-      );
-
-      // Try to find any element that says Unfollow
-      const candidates = Array.from(document.querySelectorAll('[role="menuitem"], [role="button"], div, span, a'));
-      const unfollowEl = candidates.find(el => {
-        const t = (el.textContent || '').trim();
-        return t === 'Unfollow' || t === 'Unlike' || t.includes('Unfollow');
+      var unfollowEl = Array.from(document.querySelectorAll('[role="menuitem"], [role="button"]')).find(function(el) {
+        return /unfollow/i.test(el.textContent || '');
       });
-
       if (unfollowEl) {
         simulateTap(unfollowEl);
-        console.log('%c[✅ Unfollowed (mobile)]%c ' + profileUrl, 'color:#4CAF50;', 'color:white;');
         await wait(600);
-
-        // Confirm dialog if present
-        const confirmBtn = Array.from(document.querySelectorAll('[role="button"], button')).find(el =>
-          /^(Unfollow|Confirm|Update|OK)$/i.test((el.textContent || '').trim())
-        );
-        if (confirmBtn) {
-          simulateTap(confirmBtn);
-          await wait(500);
-        }
+        var confirmBtn = Array.from(document.querySelectorAll('[role="button"], button')).find(function(el) {
+          return /^(Unfollow|Confirm|Update|OK)$/i.test((el.textContent || '').trim());
+        });
+        if (confirmBtn) { simulateTap(confirmBtn); await wait(500); }
         return true;
       }
     }
-
-    // Fallback: look for 3-dot / more menu on the row
-    const moreBtn = profileEl.querySelector('[aria-label*="More"], [aria-label*="Options"], [aria-label*="menu"]') ||
-      Array.from(profileEl.querySelectorAll('div[role="button"]')).find(el =>
-        el.innerHTML.includes('⋯') || el.querySelector('svg')
-      );
-
-    if (moreBtn) {
-      simulateTap(moreBtn);
-      await wait(700);
-      const unfollowEl = Array.from(document.querySelectorAll('[role="menuitem"], [role="button"]')).find(el =>
-        (el.textContent || '').includes('Unfollow') || (el.textContent || '').includes('Following')
-      );
-      if (unfollowEl) {
-        simulateTap(unfollowEl);
-        console.log('%c[✅ Unfollowed via menu (mobile)]%c ' + profileUrl, 'color:#4CAF50;', 'color:white;');
-        await wait(600);
-        return true;
-      }
-    }
-
-    console.warn('[❌ Mobile] No unfollow control found for', profileUrl);
     return false;
   }
 
   async function tryUnfollowDesktop(hoverContainer, profileUrl) {
-    if (DRY_RUN) {
-      console.log('%c[DRY RUN] Would unfollow: ' + profileUrl, 'color:#FFCC00;');
-      return true;
-    }
-
-    // 3-dot menu
-    const threeDotBtn =
+    if (DRY_RUN) return true;
+    var threeDotBtn =
       !(hoverContainer.querySelector('div[role="button"][aria-label="Following"]') ||
         hoverContainer.querySelector('div[role="button"][aria-label="Liked"]')) &&
-      Array.from(hoverContainer.querySelectorAll('div[role="none"], div[role="button"]')).find(
-        (el) => el.querySelector('svg circle[cx="12"][cy="12"]') || el.innerHTML.includes('⋯')
-      );
-
+      Array.from(hoverContainer.querySelectorAll('div[role="none"], div[role="button"]')).find(function(el) {
+        return el.querySelector('svg circle[cx="12"][cy="12"]') || (el.innerHTML || '').indexOf('⋯') !== -1;
+      });
     if (threeDotBtn) {
       threeDotBtn.click();
-      console.log('%c[🟡 3-dot menu]%c Opening...', 'color:${colors.warn};', 'color:white;');
       await wait(800);
-
-      const unfollowMenu = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="none"]')).find(
-        (el) => el.textContent && el.textContent.includes('Following')
-      );
+      var unfollowMenu = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="none"]')).find(function(el) {
+        return el.textContent && el.textContent.indexOf('Following') !== -1;
+      });
       if (unfollowMenu) {
         unfollowMenu.click();
         await wait(700);
-        const dialog = await waitForElement('div[role="dialog"]', 4000);
+        var dialog = await waitForElement('div[role="dialog"]', 4000);
         if (dialog) {
-          const unfollowRadio = Array.from(dialog.querySelectorAll('div[role="radio"]')).find((el) =>
-            el.textContent && el.textContent.includes('Unfollow')
-          );
+          var unfollowRadio = Array.from(dialog.querySelectorAll('div[role="radio"]')).find(function(el) {
+            return el.textContent && el.textContent.indexOf('Unfollow') !== -1;
+          });
           if (unfollowRadio) { unfollowRadio.click(); await wait(300); }
-
           if (ALSO_UNLIKE_PAGES) {
-            const unlikeButton = Array.from(document.querySelectorAll('div[role="button"], input[role="switch"]')).find(
-              (el) => (el.textContent && el.textContent.includes('Unlike this Page')) || el.getAttribute('aria-label') === 'Unlike'
-            );
+            var unlikeButton = Array.from(document.querySelectorAll('div[role="button"], input[role="switch"]')).find(function(el) {
+              return (el.textContent && el.textContent.indexOf('Unlike this Page') !== -1) || el.getAttribute('aria-label') === 'Unlike';
+            });
             if (unlikeButton) { unlikeButton.click(); await wait(400); }
           }
-
-          const updateBtn = Array.from(dialog.querySelectorAll('div[role="button"], button')).find(
-            (el) => el.textContent && el.textContent.trim() === 'Update'
-          );
-          if (updateBtn) {
-            updateBtn.click();
-            console.log('%c[💾 Updated]%c ' + profileUrl, 'color:${colors.success};', 'color:white;');
-            await wait(800);
-            return true;
-          }
+          var updateBtn = Array.from(dialog.querySelectorAll('div[role="button"], button')).find(function(el) {
+            return el.textContent && el.textContent.trim() === 'Update';
+          });
+          if (updateBtn) { updateBtn.click(); await wait(800); return true; }
         }
       }
     }
-
-    // Direct Unfollow
-    const directBtn = hoverContainer.querySelector('div[role="button"][aria-label="Unfollow"]');
-    if (directBtn) {
-      directBtn.click();
-      console.log('%c[✅ Unfollowed]%c Direct — ' + profileUrl, 'color:#4CAF50;', 'color:white;');
-      return true;
-    }
-
-    // Following / Liked button → dialog
-    const followingBtn =
+    var directBtn = hoverContainer.querySelector('div[role="button"][aria-label="Unfollow"]');
+    if (directBtn) { directBtn.click(); return true; }
+    var followingBtn =
       hoverContainer.querySelector('div[role="button"][aria-label="Following"]') ||
       hoverContainer.querySelector('div[role="button"][aria-label="Liked"]') ||
       hoverContainer.querySelector('div[role="button"][aria-label="Favorites"]');
-
     if (followingBtn) {
       followingBtn.click();
       await wait(SHORT_FIXED_PAUSE);
-      const dialog = await waitForElement('div[role="dialog"]', 6000);
-      if (!dialog) return false;
-
-      const unfollowRadio = Array.from(dialog.querySelectorAll('div[role="radio"]')).find((el) =>
-        el.textContent && el.textContent.includes('Unfollow')
-      );
-      if (unfollowRadio) { unfollowRadio.click(); await wait(400); }
-
+      var dialog2 = await waitForElement('div[role="dialog"]', 6000);
+      if (!dialog2) return false;
+      var unfollowRadio2 = Array.from(dialog2.querySelectorAll('div[role="radio"]')).find(function(el) {
+        return el.textContent && el.textContent.indexOf('Unfollow') !== -1;
+      });
+      if (unfollowRadio2) { unfollowRadio2.click(); await wait(400); }
       if (ALSO_UNLIKE_PAGES) {
-        const unlikeButton = Array.from(document.querySelectorAll('div[role="button"], input[role="switch"]')).find(
-          (el) => (el.textContent && el.textContent.includes('Unlike this Page')) || el.getAttribute('aria-label') === 'Unlike'
-        );
-        if (unlikeButton) { unlikeButton.click(); await wait(400); }
+        var unlikeButton2 = Array.from(document.querySelectorAll('div[role="button"], input[role="switch"]')).find(function(el) {
+          return (el.textContent && el.textContent.indexOf('Unlike this Page') !== -1) || el.getAttribute('aria-label') === 'Unlike';
+        });
+        if (unlikeButton2) { unlikeButton2.click(); await wait(400); }
       }
-
-      const updateBtn = Array.from(dialog.querySelectorAll('div[role="button"], button')).find(
-        (el) => el.textContent && el.textContent.trim() === 'Update'
-      );
-      if (updateBtn) {
-        updateBtn.click();
-        console.log('%c[💾 Updated]%c ' + profileUrl, 'color:${colors.success};', 'color:white;');
-        await wait(800);
-        return true;
-      }
+      var updateBtn2 = Array.from(dialog2.querySelectorAll('div[role="button"], button')).find(function(el) {
+        return el.textContent && el.textContent.trim() === 'Update';
+      });
+      if (updateBtn2) { updateBtn2.click(); await wait(800); return true; }
     }
-
-    // Options fallback
-    const optionsBtn = hoverContainer.querySelector('div[role="button"][aria-label*="Options"]');
+    var optionsBtn = hoverContainer.querySelector('div[role="button"][aria-label*="Options"]');
     if (optionsBtn) {
       optionsBtn.click();
       await wait(SHORT_FIXED_PAUSE);
-      const unfollowMenu = Array.from(document.querySelectorAll('div[role="menuitem"]')).find((el) =>
-        el.textContent && el.textContent.includes('Unfollow')
-      );
-      if (unfollowMenu) {
-        unfollowMenu.click();
-        console.log('%c[✅ Unfollowed]%c via Options — ' + profileUrl, 'color:#4CAF50;', 'color:white;');
-        return true;
-      }
+      var unfollowMenu2 = Array.from(document.querySelectorAll('div[role="menuitem"]')).find(function(el) {
+        return el.textContent && el.textContent.indexOf('Unfollow') !== -1;
+      });
+      if (unfollowMenu2) { unfollowMenu2.click(); return true; }
     }
-
     return false;
   }
 
   async function processOneProfile() {
-    // Desktop + mobile selectors for the following list
-    const selectors = isMobile
-      ? [
-          'div[data-pagelet] a[href*="facebook.com/"]',
-          'div[role="article"]',
-          'div.x1n2onr6',
-          'div[data-nt="NT:BOX_3"]',
-          'div[style*="flex"] > div > a[href*="/"]'
-        ]
-      : [
-          'div.x78zum5.x1q0g3np.x1a02dak.x1qughib > div',
-          'div[data-pagelet="ProfileAppSection_0"] div[role="article"]',
-          'div.x1n2onr6 > div'
-        ];
-
-    let profileContainers = [];
-    for (const sel of selectors) {
-      const found = document.querySelectorAll(sel);
-      if (found.length > 0) {
-        profileContainers = Array.from(found);
-        break;
-      }
+    var selectors = isMobile
+      ? ['div[data-pagelet] a[href*="facebook.com/"]', 'div[role="article"]', 'div.x1n2onr6']
+      : ['div.x78zum5.x1q0g3np.x1a02dak.x1qughib > div', 'div[data-pagelet="ProfileAppSection_0"] div[role="article"]', 'div.x1n2onr6 > div'];
+    var profileContainers = [];
+    for (var s = 0; s < selectors.length; s++) {
+      var found = document.querySelectorAll(selectors[s]);
+      if (found.length > 0) { profileContainers = Array.from(found); break; }
     }
-
-    // Also collect direct links that look like profiles
     if (profileContainers.length === 0) {
-      profileContainers = Array.from(document.querySelectorAll('a[href*="facebook.com/"]')).filter(a => {
-        const href = a.href || '';
-        return href.includes('facebook.com/') && !href.includes('/photo') && !href.includes('/video') && !href.includes('/posts/');
+      profileContainers = Array.from(document.querySelectorAll('a[href*="facebook.com/"]')).filter(function(a) {
+        var href = a.href || '';
+        return href.indexOf('facebook.com/') !== -1 && href.indexOf('/photo') === -1;
       });
     }
-
-    let foundProfile = false;
-
-    for (const profile of profileContainers) {
-      const link = profile.tagName === 'A' ? profile : profile.querySelector('a[href*="facebook.com/"], a[href*="m.facebook.com/"]');
+    var foundProfile = false;
+    for (var i = 0; i < profileContainers.length; i++) {
+      var profile = profileContainers[i];
+      var link = profile.tagName === 'A' ? profile : profile.querySelector('a[href*="facebook.com/"]');
       if (!link) continue;
-
-      const href = link.href;
-      if (processedProfiles.has(href)) continue;
-      if (!isTargetMatch(href)) continue;
-
+      var href = link.href;
+      if (processedProfiles.has(href) || !isTargetMatch(href)) continue;
       foundProfile = true;
       scrollAttemptsWithoutNew = 0;
-      console.log('%c[⚙️ Processing]%c ' + href, 'color:cyan;', 'color:white;');
-
+      syncProgress('Processing…');
       profile.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await wait(isMobile ? 700 : 500);
-
-      let success = false;
-
+      var success = false;
       if (isMobile) {
         success = await tryUnfollowMobile(profile, href);
       } else {
-        // Desktop: trigger hover card
         link.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
-        link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, cancelable: true }));
-
-        const hoverContainer = await waitForElement(
-          'div[aria-label="Link preview"], div[role="dialog"], div.x1n2onr6.x1ja2u2z',
-          HOVER_WAIT_TIMEOUT
-        );
-
+        var hoverContainer = await waitForElement('div[aria-label="Link preview"], div[role="dialog"]', HOVER_WAIT_TIMEOUT);
         if (hoverContainer) {
           success = await tryUnfollowDesktop(hoverContainer, href);
-          const closeBtn = document.querySelector('div[role="button"][aria-label="Close"], div[aria-label="Close"]');
+          var closeBtn = document.querySelector('div[role="button"][aria-label="Close"]');
           if (closeBtn) closeBtn.click();
         } else {
-          console.warn('[❌] Hover card not found');
-          // Fallback: try treating the row itself as the container
           success = await tryUnfollowDesktop(profile, href);
         }
       }
-
-      if (success) {
-        successCount++;
-        actionsThisSession++;
-      } else {
-        failCount++;
-      }
-
+      if (success) { successCount++; actionsThisSession++; syncProgress('Unfollowed ' + successCount); }
+      else { failCount++; syncProgress('Failed'); }
       processedProfiles.add(href);
-
       if (actionsThisSession > 0 && actionsThisSession % COOLDOWN_EVERY_N === 0) {
-        console.log('%c[⏸ Cooldown] ' + COOLDOWN_SECONDS + 's', 'color:#FF9800;');
+        syncProgress('Cooldown ' + COOLDOWN_SECONDS + 's…');
         await wait(COOLDOWN_SECONDS * 1000);
       }
-
-      if (successCount >= DAILY_CAP) {
-        processActive = false;
-        console.log('%c[🛑 Daily cap reached]', 'color:#FF5722;font-weight:bold;');
-      }
-
-      break; // one per loop
+      if (successCount >= DAILY_CAP) { processActive = false; syncProgress('Daily cap reached'); }
+      break;
     }
-
     if (!foundProfile) {
       scrollAttemptsWithoutNew++;
-      console.log('[ℹ️ Scroll] ' + scrollAttemptsWithoutNew + '/' + MAX_SCROLL_ATTEMPTS);
-      if (scrollAttemptsWithoutNew >= MAX_SCROLL_ATTEMPTS) {
-        processActive = false;
-        console.log('%c[🏁 Finished]', 'color:#4CAF50;font-weight:bold;');
-      } else {
-        window.scrollTo(0, document.body.scrollHeight);
-        await wait(isMobile ? 2000 : 1500);
-      }
+      syncProgress('Scrolling… (' + scrollAttemptsWithoutNew + '/' + MAX_SCROLL_ATTEMPTS + ')');
+      if (scrollAttemptsWithoutNew >= MAX_SCROLL_ATTEMPTS) processActive = false;
+      else { window.scrollTo(0, document.body.scrollHeight); await wait(isMobile ? 2000 : 1500); }
     }
-  }
-
-  // Helpful tip for mobile users
-  if (isMobile && window.location.hostname.startsWith('m.')) {
-    console.log('%c[Tip] For better results open facebook.com and request Desktop site, then re-run.', 'color:#FF9800;');
   }
 
   while (processActive) {
@@ -416,8 +276,10 @@ window.__FB_UNFOLLOW_RUNNING__ = true;
   }
 
   window.__FB_UNFOLLOW_RUNNING__ = false;
-  console.log('%c[Summary] ✅ ' + successCount + ' success | ❌ ' + failCount + ' failed', 'color:#FFD700;font-weight:bold;');
-  alert('FB Unfollow Studio finished.\\n✅ Success: ' + successCount + '\\n❌ Failed: ' + failCount);
+  var summary = '✅ ' + successCount + ' success | ❌ ' + failCount + ' failed';
+  console.log('%c[Summary] ' + summary, 'color:#FFD700;font-weight:bold;');
+  if (window.__FB_PROGRESS__) window.__FB_PROGRESS__.done(summary);
+  else alert('FB Unfollow Studio finished.\\n' + summary);
 })();
 })();`;
 }
@@ -427,12 +289,11 @@ export function generateUserscript(config: UnfollowConfig): string {
     .replace(/^javascript:/, "")
     .replace(/^\(function\(\)\{/, "")
     .replace(/\}\)\(\);$/, "");
-
   return `// ==UserScript==
 // @name         FB Unfollow Studio
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.1.0
-// @description  Auto-unfollow tool with improved mobile support
+// @version      1.4.0
+// @description  Auto-unfollow with live progress bar
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/*
 // @match        https://facebook.com/*
