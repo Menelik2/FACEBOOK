@@ -1,0 +1,57 @@
+import { UnfollowConfig, PresetId } from "./types";
+
+/** Partial overrides applied on top of current config when a preset is selected */
+export const PRESETS: Record<
+  Exclude<PresetId, "custom">,
+  Partial<UnfollowConfig> & { label: string; description: string }
+> = {
+  safe: {
+    label: "Safe",
+    description: "Slow & careful — lowest ban risk",
+    INTERVAL_BETWEEN_ACTIONS: 4000,
+    SHORT_FIXED_PAUSE: 1200,
+    HOVER_WAIT_TIMEOUT: 5000,
+    DAILY_CAP: 150,
+    COOLDOWN_EVERY_N: 10,
+    COOLDOWN_SECONDS: 45,
+    RANDOM_JITTER: true,
+    MAX_PER_MINUTE: 8,
+    BASE_DELAY: 1500,
+    JITTER: 800,
+    UNFRIEND_DELAY: 1500,
+    AUTO_STOP_ON_RATE_LIMIT: true,
+    DRY_RUN: false,
+  },
+  balanced: {
+    label: "Balanced",
+    description: "Good speed with solid safety margins",
+    INTERVAL_BETWEEN_ACTIONS: 2500,
+    SHORT_FIXED_PAUSE: 800,
+    HOVER_WAIT_TIMEOUT: 4000,
+    DAILY_CAP: 500,
+    COOLDOWN_EVERY_N: 20,
+    COOLDOWN_SECONDS: 20,
+    RANDOM_JITTER: true,
+    MAX_PER_MINUTE: 20,
+    BASE_DELAY: 900,
+    JITTER: 600,
+    UNFRIEND_DELAY: 800,
+    AUTO_STOP_ON_RATE_LIMIT: true,
+  },
+  aggressive: {
+    label: "Aggressive",
+    description: "Faster — higher risk. Use sparingly.",
+    INTERVAL_BETWEEN_ACTIONS: 1200,
+    SHORT_FIXED_PAUSE: 400,
+    HOVER_WAIT_TIMEOUT: 3000,
+    DAILY_CAP: 800,
+    COOLDOWN_EVERY_N: 30,
+    COOLDOWN_SECONDS: 12,
+    RANDOM_JITTER: true,
+    MAX_PER_MINUTE: 30,
+    BASE_DELAY: 500,
+    JITTER: 300,
+    UNFRIEND_DELAY: 450,
+    AUTO_STOP_ON_RATE_LIMIT: true,
+  },
+};
