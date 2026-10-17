@@ -1,6 +1,7 @@
 import { UnfollowConfig } from "./types";
 import { getProgressUICode } from "./progress-ui";
 import { getDesktopOnlyGuard } from "./desktop-guard";
+import { getAdvancedRuntimeCode } from "./advanced-runtime";
 
 export function generateUnfriendScript(config: UnfollowConfig): string {
   const {
@@ -14,6 +15,13 @@ export function generateUnfriendScript(config: UnfollowConfig): string {
     COOLDOWN_EVERY_N,
     COOLDOWN_SECONDS,
     THEME,
+    WHITELIST,
+    BLACKLIST,
+    USE_BLACKLIST_ONLY,
+    AUTO_STOP_ON_RATE_LIMIT,
+    SOUND_ON_FINISH,
+    SKIP_VERIFIED,
+    LOG_ACTIONS,
   } = config;
 
   const themeColors: Record<string, string> = {
@@ -24,6 +32,15 @@ export function generateUnfriendScript(config: UnfollowConfig): string {
   const primary = themeColors[THEME] || themeColors.neon;
   const progressCode = getProgressUICode("FB Auto Unfriend", primary);
   const desktopGuard = getDesktopOnlyGuard();
+  const advancedCode = getAdvancedRuntimeCode({
+    whitelist: WHITELIST || "",
+    blacklist: BLACKLIST || "",
+    useBlacklistOnly: !!USE_BLACKLIST_ONLY,
+    autoStopOnRateLimit: AUTO_STOP_ON_RATE_LIMIT !== false,
+    soundOnFinish: !!SOUND_ON_FINISH,
+    skipVerified: !!SKIP_VERIFIED,
+    logActions: LOG_ACTIONS !== false,
+  });
 
   return `javascript:(function(){
 if (window.__FB_UNFRIEND_RUNNING__) {
@@ -34,11 +51,11 @@ window.__FB_UNFRIEND_RUNNING__ = true;
 
 ${desktopGuard}
 ${progressCode}
+${advancedCode}
 
 (async function smartUnfriendLoop() {
   'use strict';
-  console.log('%c[Facebook Auto Unfriend Started — Desktop]', 'color:${primary};font-weight:bold;');
-  console.log('%cTo stop: window.facebookUnfriendStop() or progress panel Stop', 'color:#FF9800;');
+  console.log('%c[Facebook Auto Unfriend — Advanced]', 'color:${primary};font-weight:bold;');
 
   const UNFRIEND_DELAY = ${UNFRIEND_DELAY};
   const SCROLL_AMOUNT = ${UNFRIEND_SCROLL_AMOUNT};
@@ -61,6 +78,7 @@ ${progressCode}
     window.__FB_PROGRESS__.onStop(function() { window.facebookUnfriendStop(); });
     window.__FB_PROGRESS__.update({ status: DRY_RUN ? 'Dry run mode' : 'Running…', cap: DAILY_CAP });
   }
+  if (window.__FB_ADV__) window.__FB_ADV__.wirePauseButton();
 
   const delay = function(ms) {
     var actual = ms;
@@ -86,6 +104,11 @@ ${progressCode}
     return text || ('btn-' + Math.random().toString(36).slice(2));
   }
 
+  function getRowText(btn) {
+    var row = btn.closest('[role="listitem"], [role="article"], div') || btn.parentElement;
+    return (row && row.textContent) || '';
+  }
+
   function syncProgress(status) {
     if (window.__FB_PROGRESS__) {
       window.__FB_PROGRESS__.update({
@@ -96,6 +119,14 @@ ${progressCode}
   }
 
   while (!stopRequested) {
+    if (window.__FB_ADV__) await window.__FB_ADV__.waitWhilePaused();
+    if (window.__FB_ADV__ && window.__FB_ADV__.detectRateLimit()) {
+      console.warn('[🛑] Rate limit / security check detected — auto-stopping');
+      syncProgress('Rate limit detected — stopped');
+      stopRequested = true;
+      break;
+    }
+
     var buttons = [].slice.call(document.querySelectorAll('div[aria-label="Friends"]'));
     var fresh = buttons.filter(function(btn) {
       var key = getProfileKey(btn);
@@ -114,19 +145,40 @@ ${progressCode}
 
     for (var i = 0; i < fresh.length; i++) {
       if (stopRequested) break;
+      if (window.__FB_ADV__) await window.__FB_ADV__.waitWhilePaused();
+
       var btn = fresh[i];
       var key = getProfileKey(btn);
+      var rowText = getRowText(btn);
       processed.add(key);
+
+      if (window.__FB_ADV__ && window.__FB_ADV__.shouldSkipTarget(key + ' ' + rowText)) {
+        if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'skip-whitelist', target: key, ok: true });
+        syncProgress('Skipped (filter)');
+        continue;
+      }
+      if (window.__FB_ADV__ && window.__FB_ADV__.looksVerified(btn.closest('[role="listitem"], [role="article"]') || btn.parentElement)) {
+        if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'skip-verified', target: key, ok: true });
+        syncProgress('Skipped verified');
+        continue;
+      }
+
       btn.scrollIntoView({ block: 'center' });
       await delay(300);
 
       if (DRY_RUN) {
         successCount++; actionsThisSession++;
+        if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'dry-unfriend', target: key, ok: true });
         syncProgress('Dry run: ' + key.slice(0, 40));
         continue;
       }
 
-      try { btn.click(); } catch (e) { failCount++; syncProgress('Click failed'); continue; }
+      try { btn.click(); } catch (e) {
+        failCount++;
+        if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'unfriend', target: key, ok: false });
+        syncProgress('Click failed');
+        continue;
+      }
       await delay(SHORT_PAUSE);
 
       var unfriend = Array.from(document.querySelectorAll('[role="menuitem"]'))
@@ -134,6 +186,7 @@ ${progressCode}
 
       if (!unfriend) {
         failCount++;
+        if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'unfriend', target: key, ok: false });
         syncProgress('No Unfriend option');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await delay(200);
@@ -149,6 +202,7 @@ ${progressCode}
         });
       if (confirm) confirm.click();
       successCount++; actionsThisSession++;
+      if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'unfriend', target: key, ok: true });
       syncProgress('Unfriended ' + successCount);
 
       if (actionsThisSession > 0 && actionsThisSession % COOLDOWN_EVERY_N === 0) {
@@ -176,8 +230,8 @@ export function generateUnfriendUserscript(config: UnfollowConfig): string {
   return `// ==UserScript==
 // @name         FB Auto Unfriend
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.5.0
-// @description  Desktop-only auto unfriend with progress bar
+// @version      1.6.0
+// @description  Advanced desktop unfriend with filters & progress
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/*/friends*
 // @match        https://facebook.com/*/friends*

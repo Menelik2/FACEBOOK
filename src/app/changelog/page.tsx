@@ -2,19 +2,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const entries = [
   {
-    version: "1.5.0",
+    version: "1.6.0",
     date: "2026-10-17",
     changes: [
-      "Desktop-only: scripts refuse to run on mobile / m.facebook.com",
-      "Full visual step-by-step user guide for Unfollow, Leave Groups, Unfriend",
-      "Mock browser illustrations + progress panel preview in the Guide",
-      "Landing and Bookmarklet pages updated for desktop-only messaging",
+      "Presets: Safe / Balanced / Aggressive",
+      "Whitelist & blacklist keyword filters",
+      "Auto-stop on rate limit / CAPTCHA / checkpoint",
+      "Pause / Resume on progress panel",
+      "Optional finish sound",
+      "Skip verified heuristic",
+      "Action log export (CSV) from progress panel",
+      "Session History page (localStorage)",
     ],
+  },
+  {
+    version: "1.5.0",
+    date: "2026-10-17",
+    changes: ["Desktop-only enforcement", "Full visual user guide"],
   },
   {
     version: "1.4.0",
     date: "2026-10-17",
-    changes: ["Live progress overlay on Facebook for all modes"],
+    changes: ["Live progress overlay for all modes"],
   },
   {
     version: "1.3.0",
@@ -29,7 +38,7 @@ const entries = [
   {
     version: "1.0.0",
     date: "2026-10-17",
-    changes: ["Initial release — Unfollow"],
+    changes: ["Initial release"],
   },
 ];
 
