@@ -1,4 +1,8 @@
+export type AppMode = "unfollow" | "leave-groups";
+
 export interface UnfollowConfig {
+  MODE: AppMode;
+  // Shared / Unfollow
   INTERVAL_BETWEEN_ACTIONS: number;
   SHORT_FIXED_PAUSE: number;
   HOVER_WAIT_TIMEOUT: number;
@@ -11,9 +15,16 @@ export interface UnfollowConfig {
   COOLDOWN_SECONDS: number;
   TARGET: "all" | "profiles" | "pages";
   THEME: "neon" | "minimal" | "retro";
+  // Leave Groups specific
+  MAX_PER_MINUTE: number;
+  BASE_DELAY: number;
+  JITTER: number;
+  SCROLL_DISTANCE: number;
+  SCROLL_DELAY_ON_EMPTY: number;
 }
 
 export const DEFAULT_CONFIG: UnfollowConfig = {
+  MODE: "unfollow",
   INTERVAL_BETWEEN_ACTIONS: 2500,
   SHORT_FIXED_PAUSE: 800,
   HOVER_WAIT_TIMEOUT: 4000,
@@ -26,4 +37,9 @@ export const DEFAULT_CONFIG: UnfollowConfig = {
   COOLDOWN_SECONDS: 20,
   TARGET: "all",
   THEME: "neon",
+  MAX_PER_MINUTE: 20,
+  BASE_DELAY: 900,
+  JITTER: 600,
+  SCROLL_DISTANCE: 2200,
+  SCROLL_DELAY_ON_EMPTY: 7000,
 };
