@@ -1,5 +1,6 @@
 import { UnfollowConfig } from "./types";
 import { getProgressUICode } from "./progress-ui";
+import { getDesktopOnlyGuard } from "./desktop-guard";
 
 export function generateLeaveGroupsScript(config: UnfollowConfig): string {
   const {
@@ -19,6 +20,7 @@ export function generateLeaveGroupsScript(config: UnfollowConfig): string {
   };
   const primary = themeColors[THEME] || themeColors.neon;
   const progressCode = getProgressUICode("FB Leave Groups", primary);
+  const desktopGuard = getDesktopOnlyGuard();
 
   return `javascript:(function(){
 if (window._facebookAutoLeaveRunning) {
@@ -27,6 +29,7 @@ if (window._facebookAutoLeaveRunning) {
 }
 window._facebookAutoLeaveRunning = true;
 
+${desktopGuard}
 ${progressCode}
 
 (function facebookAutoLeave(defaults) {
@@ -44,7 +47,6 @@ ${progressCode}
   var stopRequested = false;
   window.facebookAutoLeaveStop = function() {
     stopRequested = true;
-    console.log('%c[Stop requested]', 'color:#FF5722;font-weight:bold;');
     if (window.__FB_PROGRESS__) window.__FB_PROGRESS__.update({ status: 'Stopping…' });
   };
 
@@ -53,15 +55,13 @@ ${progressCode}
     window.__FB_PROGRESS__.update({ status: options.dryRun ? 'Dry run mode' : 'Running…', cap: options.maxPerMinute * 5 });
   }
 
-  console.log('%c[Facebook Auto Leave Groups Started]', 'color:${primary};font-weight:bold;');
-  console.log('%cTo stop: window.facebookAutoLeaveStop() or click Stop', 'color:#FF9800;');
+  console.log('%c[Facebook Auto Leave Groups — Desktop]', 'color:${primary};font-weight:bold;');
 
   var delay = function(ms) { return new Promise(function(res) { setTimeout(res, ms); }); };
   var rand = function(n) { return Math.floor(Math.random() * n); };
   var humanDelay = async function() {
     var jitter = Math.floor((Math.random() * 2 - 1) * options.jitter);
-    var d = Math.max(250, options.baseDelay + jitter);
-    await delay(d);
+    await delay(Math.max(250, options.baseDelay + jitter));
   };
 
   var actionTimestamps = [];
@@ -79,10 +79,8 @@ ${progressCode}
   function syncProgress(status) {
     if (window.__FB_PROGRESS__) {
       window.__FB_PROGRESS__.update({
-        success: successCount,
-        fail: failCount,
-        total: successCount + failCount,
-        status: status
+        success: successCount, fail: failCount,
+        total: successCount + failCount, status: status
       });
     }
   }
@@ -90,10 +88,9 @@ ${progressCode}
   function findMoreButtons() {
     var byAria = [].slice.call(document.querySelectorAll('[aria-label="More"], [aria-label="More options"], div[aria-label*="More"]'));
     var byRoleBtn = [].slice.call(document.querySelectorAll('div[role="button"], a[role="button"]'));
-    var candidates = byAria.concat(byRoleBtn).filter(function(el) {
+    return Array.from(new Set(byAria.concat(byRoleBtn).filter(function(el) {
       return !!el.closest('[role="listitem"], [role="article"], [data-visualcompletion]');
-    });
-    return Array.from(new Set(candidates));
+    })));
   }
 
   async function openMenuFor(btn) {
@@ -128,42 +125,25 @@ ${progressCode}
   async function processOne(btn) {
     if (processed.has(btn)) return false;
     processed.add(btn);
-
     if (!canDoAction()) {
       var waitMs = 8000 + rand(6000);
-      syncProgress('Rate limit — waiting ' + Math.round(waitMs/1000) + 's');
+      syncProgress('Rate limit — waiting');
       await delay(waitMs);
     }
     if (stopRequested) return true;
-
     if (options.dryRun) {
-      successCount++;
-      recordAction();
-      syncProgress('Dry run leave');
+      successCount++; recordAction(); syncProgress('Dry run leave');
       return true;
     }
-
-    var opened = await openMenuFor(btn);
-    if (!opened) { failCount++; syncProgress('Menu open failed'); return false; }
-
+    if (!(await openMenuFor(btn))) { failCount++; syncProgress('Menu failed'); return false; }
     await delay(250 + rand(300));
     var leaveCandidates = findLeaveButtonsInMenu();
-    if (leaveCandidates.length === 0) {
-      var alt = [].slice.call(document.querySelectorAll('[aria-label]')).filter(function(n) {
-        return /leave\s*group/i.test(n.getAttribute('aria-label') || '');
-      });
-      if (alt.length) leaveCandidates = leaveCandidates.concat(alt);
-    }
-
-    if (leaveCandidates.length === 0) {
-      failCount++;
-      syncProgress('No Leave Group button');
+    if (!leaveCandidates.length) {
+      failCount++; syncProgress('No Leave Group button');
       return false;
     }
-
     await clickIfVisible(leaveCandidates[0]);
     await delay(500 + rand(500));
-
     var dialog = await new Promise(function(res) {
       var start = Date.now();
       (function check() {
@@ -173,7 +153,6 @@ ${progressCode}
         else requestAnimationFrame(check);
       })();
     });
-
     if (dialog) {
       var leaveDialogBtn = [].slice.call(dialog.querySelectorAll('div[role="button"], button')).find(function(b) {
         return /leave group/i.test(b.innerText || b.textContent || '');
@@ -183,11 +162,9 @@ ${progressCode}
         await delay(800 + rand(500));
       }
     }
-
     recordAction();
     successCount++;
     syncProgress('Left group #' + successCount);
-    console.log('%c✅ Left a group (' + successCount + ')', 'color:#4CAF50;');
     await delay(900 + rand(900));
     return true;
   }
@@ -196,22 +173,17 @@ ${progressCode}
     try {
       while (!stopRequested) {
         var candidates = findMoreButtons().filter(function(b) { return !processed.has(b); });
-        if (candidates.length === 0) {
+        if (!candidates.length) {
           window.scrollBy({ top: options.scrollDistance, behavior: 'smooth' });
-          syncProgress('Scrolling for more groups…');
+          syncProgress('Scrolling…');
           await delay(options.scrollDelayOnEmpty + rand(2000));
           candidates = findMoreButtons().filter(function(b) { return !processed.has(b); });
-          if (candidates.length === 0 && findMoreButtons().length === 0) {
-            console.log('%c✅ Done — no more groups.', 'color:#4CAF50;font-weight:bold;');
-            break;
-          }
+          if (!candidates.length && !findMoreButtons().length) break;
         }
-
         var batch = candidates.slice(0, Math.max(1, Math.floor(options.maxPerMinute / 3)));
         for (var i = 0; i < batch.length; i++) {
           if (stopRequested) break;
-          try { await processOne(batch[i]); }
-          catch (err) { failCount++; console.error(err); }
+          try { await processOne(batch[i]); } catch (err) { failCount++; }
           await humanDelay();
         }
         await delay(600 + rand(900));
@@ -219,14 +191,13 @@ ${progressCode}
     } finally {
       window._facebookAutoLeaveRunning = false;
       var summary = '✅ ' + successCount + ' left | ❌ ' + failCount + ' failed';
-      console.log('%c[Summary] ' + summary, 'color:#FFD700;font-weight:bold;');
       if (window.__FB_PROGRESS__) window.__FB_PROGRESS__.done(summary);
       else alert('Facebook Auto Leave Groups finished.\\n' + summary);
     }
   }
 
   mainLoop().catch(function(err) {
-    console.error('fatal:', err);
+    console.error(err);
     window._facebookAutoLeaveRunning = false;
   });
 })();
@@ -238,16 +209,14 @@ export function generateLeaveGroupsUserscript(config: UnfollowConfig): string {
     .replace(/^javascript:/, "")
     .replace(/^\(function\(\)\{/, "")
     .replace(/\}\)\(\);$/, "");
-
   return `// ==UserScript==
 // @name         FB Auto Leave Groups
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.4.0
-// @description  Auto leave groups with live progress bar
+// @version      1.5.0
+// @description  Desktop-only leave groups with progress bar
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/groups/joins/*
 // @match        https://facebook.com/groups/joins/*
-// @match        https://www.facebook.com/groups/*
 // @grant        none
 // @run-at       document-idle
 // ==/UserScript==
