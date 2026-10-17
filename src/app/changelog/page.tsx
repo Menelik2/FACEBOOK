@@ -2,41 +2,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const entries = [
   {
-    version: "1.3.0",
+    version: "1.4.0",
     date: "2026-10-17",
     changes: [
-      "New mode: Auto Unfriend",
-      "Runs on facebook.com/YOU/friends",
-      "Settings: delay, scroll amount, wait, daily cap, cooldowns",
-      "Stop function: window.facebookUnfriendStop()",
-      "Dry-run + random jitter support",
-      "Three-mode switcher on Configure page",
+      "Live progress overlay on Facebook pages for all modes",
+      "Shows ✅ success, ❌ failed, total count + animated progress bar",
+      "Stop and Hide buttons on the overlay",
+      "Wired into Unfollow, Leave Groups, and Unfriend scripts",
     ],
+  },
+  {
+    version: "1.3.1",
+    date: "2026-10-17",
+    changes: [
+      "Fixed Unfriend tracking (profile URL instead of DOM nodes)",
+      "Better stop conditions for Unfriend",
+    ],
+  },
+  {
+    version: "1.3.0",
+    date: "2026-10-17",
+    changes: ["New mode: Auto Unfriend"],
   },
   {
     version: "1.2.0",
     date: "2026-10-17",
-    changes: [
-      "New mode: Auto Leave Groups",
-      "Runs on facebook.com/groups/joins",
-      "Dedicated settings + stop function",
-    ],
+    changes: ["New mode: Auto Leave Groups"],
   },
   {
     version: "1.1.0",
     date: "2026-10-17",
-    changes: [
-      "Improved mobile support for Unfollow",
-      "Touch-based flow + mobile selectors",
-    ],
+    changes: ["Improved mobile support for Unfollow"],
   },
   {
     version: "1.0.0",
     date: "2026-10-17",
-    changes: [
-      "Initial release – Unfollow mode",
-      "Bookmarklet, Userscript, raw JS generators",
-    ],
+    changes: ["Initial release"],
   },
 ];
 
