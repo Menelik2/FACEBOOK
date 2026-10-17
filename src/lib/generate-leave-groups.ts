@@ -1,6 +1,7 @@
 import { UnfollowConfig } from "./types";
 import { getProgressUICode } from "./progress-ui";
 import { getDesktopOnlyGuard } from "./desktop-guard";
+import { getAdvancedRuntimeCode } from "./advanced-runtime";
 
 export function generateLeaveGroupsScript(config: UnfollowConfig): string {
   const {
@@ -11,6 +12,13 @@ export function generateLeaveGroupsScript(config: UnfollowConfig): string {
     SCROLL_DELAY_ON_EMPTY,
     DRY_RUN,
     THEME,
+    WHITELIST,
+    BLACKLIST,
+    USE_BLACKLIST_ONLY,
+    AUTO_STOP_ON_RATE_LIMIT,
+    SOUND_ON_FINISH,
+    SKIP_VERIFIED,
+    LOG_ACTIONS,
   } = config;
 
   const themeColors: Record<string, string> = {
@@ -21,6 +29,15 @@ export function generateLeaveGroupsScript(config: UnfollowConfig): string {
   const primary = themeColors[THEME] || themeColors.neon;
   const progressCode = getProgressUICode("FB Leave Groups", primary);
   const desktopGuard = getDesktopOnlyGuard();
+  const advancedCode = getAdvancedRuntimeCode({
+    whitelist: WHITELIST || "",
+    blacklist: BLACKLIST || "",
+    useBlacklistOnly: !!USE_BLACKLIST_ONLY,
+    autoStopOnRateLimit: AUTO_STOP_ON_RATE_LIMIT !== false,
+    soundOnFinish: !!SOUND_ON_FINISH,
+    skipVerified: !!SKIP_VERIFIED,
+    logActions: LOG_ACTIONS !== false,
+  });
 
   return `javascript:(function(){
 if (window._facebookAutoLeaveRunning) {
@@ -31,6 +48,7 @@ window._facebookAutoLeaveRunning = true;
 
 ${desktopGuard}
 ${progressCode}
+${advancedCode}
 
 (function facebookAutoLeave(defaults) {
   defaults = defaults || {};
@@ -54,8 +72,9 @@ ${progressCode}
     window.__FB_PROGRESS__.onStop(function() { window.facebookAutoLeaveStop(); });
     window.__FB_PROGRESS__.update({ status: options.dryRun ? 'Dry run mode' : 'Running…', cap: options.maxPerMinute * 5 });
   }
+  if (window.__FB_ADV__) window.__FB_ADV__.wirePauseButton();
 
-  console.log('%c[Facebook Auto Leave Groups — Desktop]', 'color:${primary};font-weight:bold;');
+  console.log('%c[Facebook Auto Leave Groups — Advanced]', 'color:${primary};font-weight:bold;');
 
   var delay = function(ms) { return new Promise(function(res) { setTimeout(res, ms); }); };
   var rand = function(n) { return Math.floor(Math.random() * n); };
@@ -125,6 +144,21 @@ ${progressCode}
   async function processOne(btn) {
     if (processed.has(btn)) return false;
     processed.add(btn);
+
+    if (window.__FB_ADV__) await window.__FB_ADV__.waitWhilePaused();
+    if (window.__FB_ADV__ && window.__FB_ADV__.detectRateLimit()) {
+      stopRequested = true;
+      syncProgress('Rate limit — stopped');
+      return true;
+    }
+
+    var rowText = (btn.closest('[role="listitem"], [role="article"]') || btn).textContent || '';
+    if (window.__FB_ADV__ && window.__FB_ADV__.shouldSkipTarget(rowText)) {
+      if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'skip', target: rowText.slice(0, 40), ok: true });
+      syncProgress('Skipped (filter)');
+      return false;
+    }
+
     if (!canDoAction()) {
       var waitMs = 8000 + rand(6000);
       syncProgress('Rate limit — waiting');
@@ -132,7 +166,9 @@ ${progressCode}
     }
     if (stopRequested) return true;
     if (options.dryRun) {
-      successCount++; recordAction(); syncProgress('Dry run leave');
+      successCount++; recordAction();
+      if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'dry-leave', target: rowText.slice(0, 40), ok: true });
+      syncProgress('Dry run leave');
       return true;
     }
     if (!(await openMenuFor(btn))) { failCount++; syncProgress('Menu failed'); return false; }
@@ -164,6 +200,7 @@ ${progressCode}
     }
     recordAction();
     successCount++;
+    if (window.__FB_ADV__) window.__FB_ADV__.logAction({ action: 'leave', target: rowText.slice(0, 40), ok: true });
     syncProgress('Left group #' + successCount);
     await delay(900 + rand(900));
     return true;
@@ -172,6 +209,7 @@ ${progressCode}
   async function mainLoop() {
     try {
       while (!stopRequested) {
+        if (window.__FB_ADV__) await window.__FB_ADV__.waitWhilePaused();
         var candidates = findMoreButtons().filter(function(b) { return !processed.has(b); });
         if (!candidates.length) {
           window.scrollBy({ top: options.scrollDistance, behavior: 'smooth' });
@@ -212,8 +250,8 @@ export function generateLeaveGroupsUserscript(config: UnfollowConfig): string {
   return `// ==UserScript==
 // @name         FB Auto Leave Groups
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.5.0
-// @description  Desktop-only leave groups with progress bar
+// @version      1.6.0
+// @description  Advanced desktop leave groups
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/groups/joins/*
 // @match        https://facebook.com/groups/joins/*
