@@ -5,7 +5,7 @@ import { useConfigStore } from "@/store/config-store";
 import { generateScript } from "@/lib/generate-script";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bookmark, Smartphone, Monitor } from "lucide-react";
+import { Bookmark, Smartphone, Monitor, AlertTriangle } from "lucide-react";
 
 export default function BookmarkletPage() {
   const { config } = useConfigStore();
@@ -22,8 +22,8 @@ export default function BookmarkletPage() {
     setTestLog([
       "[Test] Bookmarklet environment check…",
       "[OK] javascript: protocol is allowed in this browser context for testing.",
-      "[OK] Script generation succeeded.",
-      "[Info] Real run must happen on facebook.com/you/following",
+      "[OK] Script generation succeeded (includes mobile improvements).",
+      "[Info] Real run must happen on facebook.com or m.facebook.com following list.",
       "Open your following list, then click the bookmark you saved.",
     ]);
   };
@@ -32,7 +32,7 @@ export default function BookmarkletPage() {
     <div className="space-y-8 max-w-3xl mx-auto">
       <div className="text-center">
         <h1 className="text-3xl font-bold">Bookmarklet Installer</h1>
-        <p className="text-slate-400 mt-2">One-click run from your bookmarks bar</p>
+        <p className="text-slate-400 mt-2">One-click run from your bookmarks bar · Mobile improved</p>
       </div>
 
       <Card className="bg-slate-900 border-slate-800">
@@ -79,22 +79,36 @@ export default function BookmarkletPage() {
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Smartphone className="h-4 w-4" /> Mobile (Chrome / Safari)
+              <Smartphone className="h-4 w-4" /> Mobile (improved)
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-slate-300 space-y-2">
             <ol className="list-decimal list-inside space-y-1">
-              <li>Copy the generated javascript: URL from Configure</li>
-              <li>Create a new bookmark in your mobile browser</li>
+              <li>On Configure page, copy the generated javascript: URL</li>
+              <li>In Chrome/Safari create a new bookmark</li>
               <li>Paste the javascript: URL as the address</li>
-              <li>Open m.facebook.com following list and tap the bookmark</li>
+              <li>Open your Following list (m.facebook.com or desktop site)</li>
+              <li>Tap the bookmark</li>
             </ol>
-            <p className="text-amber-400/80 text-xs mt-2">
-              Mobile support is best-effort; Facebook’s mobile DOM changes often.
-            </p>
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-amber-950/40 border-amber-700/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-amber-200 text-base">
+            <AlertTriangle className="h-4 w-4" /> Best results on mobile
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-amber-100/90 space-y-2">
+          <p>
+            <strong>Recommended:</strong> Open <code className="bg-slate-900 px-1 rounded">facebook.com</code> in your mobile browser and request the <strong>Desktop site</strong>. Then run the bookmarklet. This uses the much more reliable desktop selectors.
+          </p>
+          <p>
+            Pure <code className="bg-slate-900 px-1 rounded">m.facebook.com</code> support is improved (touch events + mobile selectors) but still less reliable because Facebook changes the mobile DOM often.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>

@@ -6,7 +6,7 @@ export default function GuidePage() {
     <div className="space-y-8 max-w-3xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold">Step-by-step Guide</h1>
-        <p className="text-slate-400 mt-2">How to use FB Unfollow Studio safely</p>
+        <p className="text-slate-400 mt-2">How to use FB Unfollow Studio safely (desktop + mobile)</p>
       </div>
 
       <Card className="bg-slate-900 border-slate-800">
@@ -15,14 +15,15 @@ export default function GuidePage() {
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-2">
           <p>
-            On desktop go to{" "}
+            <strong>Desktop:</strong>{" "}
             <code className="bg-slate-800 px-1 rounded">facebook.com/yourusername/following</code>
           </p>
           <p>
-            On mobile open{" "}
-            <code className="bg-slate-800 px-1 rounded">m.facebook.com</code> → Profile → Following.
+            <strong>Mobile (recommended):</strong> Open <code className="bg-slate-800 px-1 rounded">facebook.com</code> and request the <strong>Desktop site</strong>, then go to Following.
           </p>
-          <p>Make sure the list of people/pages you follow is visible and scrollable.</p>
+          <p>
+            <strong>Mobile (m.facebook.com):</strong> Works with the improved touch flow, but less reliable.
+          </p>
         </CardContent>
       </Card>
 
@@ -32,12 +33,10 @@ export default function GuidePage() {
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-2">
           <p>
-            <strong>Bookmarklet:</strong> Drag the button from the Bookmarklet page to your
-            bookmarks bar.
+            <strong>Bookmarklet:</strong> Drag the button from the Bookmarklet page to your bookmarks bar (or save the javascript: URL on mobile).
           </p>
           <p>
-            <strong>Userscript:</strong> Install Tampermonkey, then paste the generated script from
-            Configure.
+            <strong>Userscript:</strong> Install Tampermonkey, then paste the generated script from Configure.
           </p>
           <p>
             <strong>Extension:</strong> Load the unpacked zip (when available).
@@ -50,9 +49,9 @@ export default function GuidePage() {
           <CardTitle>3. Run it</CardTitle>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-2">
-          <p>Open the following list, then click the bookmark / start the extension.</p>
-          <p>Open the browser console (F12 → Console) to see live progress.</p>
-          <p>The script scrolls, hovers, and unfollows one by one with your configured delays.</p>
+          <p>Open the following list, then click/tap the bookmark.</p>
+          <p>Open the browser console (F12 on desktop) to see live progress.</p>
+          <p>The script now automatically detects mobile and uses a touch-based flow.</p>
         </CardContent>
       </Card>
 
@@ -66,6 +65,7 @@ export default function GuidePage() {
             <li>Automatic cooldowns every N actions</li>
             <li>Stops after daily cap or when no more profiles are found</li>
             <li>Colored console logs so you can follow every step</li>
+            <li>On mobile: touch events + mobile selectors are used automatically</li>
           </ul>
         </CardContent>
       </Card>
@@ -78,8 +78,7 @@ export default function GuidePage() {
         </CardHeader>
         <CardContent className="text-red-100/90 text-sm space-y-2">
           <ul className="list-disc list-inside space-y-2">
-            <li>Facebook / Meta Terms of Service prohibit automation. You may risk account
-              restrictions or bans.</li>
+            <li>Facebook / Meta Terms of Service prohibit automation. You may risk account restrictions or bans.</li>
             <li>Never run more than ~500 unfollows per day.</li>
             <li>Always test first with <strong>DRY_RUN = true</strong>.</li>
             <li>

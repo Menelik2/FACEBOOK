@@ -2,6 +2,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const entries = [
   {
+    version: "1.1.0",
+    date: "2026-10-17",
+    changes: [
+      "Improved mobile support",
+      "Separate touch-based unfollow flow for mobile devices",
+      "Better mobile detection (m.facebook.com + touch + user-agent)",
+      "Mobile-specific selectors for the following list",
+      "simulateTap helper (pointer + touch + mouse events)",
+      "Clearer mobile tips in the bookmarklet page and console",
+      "Recommended path: request Desktop site on mobile browsers",
+    ],
+  },
+  {
     version: "1.0.0",
     date: "2026-10-17",
     changes: [
