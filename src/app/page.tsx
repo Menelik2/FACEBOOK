@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MotionDiv, MotionH1, MotionP } from "@/components/motion";
-import { Bookmark, Puzzle, FileCode, ArrowRight, Shield, Zap, Lock } from "lucide-react";
+import { Bookmark, Puzzle, FileCode, ArrowRight, Shield, Zap, Lock, Users } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -18,7 +18,7 @@ export default function HomePage() {
         >
           Take back control of your
           <br />
-          <span className="text-blue-500">Facebook feed</span>
+          <span className="text-blue-500">Facebook</span>
         </MotionH1>
         <MotionP
           initial={{ opacity: 0, y: 20 }}
@@ -26,8 +26,8 @@ export default function HomePage() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="mt-6 text-lg text-slate-400 max-w-2xl mx-auto"
         >
-          Safely, in one click. Configure timing, limits and behavior, then generate a
-          bookmarklet, userscript or Chrome extension that runs entirely in your browser.
+          Unfollow people & pages or leave groups — safely, in one click. Configure, generate a
+          bookmarklet or userscript, and run it entirely in your browser.
         </MotionP>
         <MotionDiv
           initial={{ opacity: 0, y: 20 }}
@@ -41,12 +41,46 @@ export default function HomePage() {
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link href="/extension">Download Extension</Link>
-          </Button>
-          <Button asChild size="lg" variant="ghost">
             <Link href="/guide">How it works</Link>
           </Button>
         </MotionDiv>
+      </section>
+
+      {/* Two modes */}
+      <section className="grid md:grid-cols-2 gap-6">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-400" /> Unfollow
+            </CardTitle>
+            <CardDescription>
+              Clean your Following list. Supports profiles, pages, dry-run, jitter, daily caps and
+              mobile-friendly flow.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/configure">Configure Unfollow</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-purple-400" /> Leave Groups
+            </CardTitle>
+            <CardDescription>
+              Leave groups you no longer want. Runs on facebook.com/groups/joins with rate limits
+              and human-like delays.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/configure">Configure Leave Groups</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid md:grid-cols-3 gap-6">
@@ -55,8 +89,7 @@ export default function HomePage() {
             <Bookmark className="h-10 w-10 text-blue-400 mb-2" />
             <CardTitle>Bookmarklet</CardTitle>
             <CardDescription>
-              Drag one button to your bookmarks bar. Open your following list and click. Works on
-              desktop and (with a bit of setup) mobile browsers.
+              Drag one button to your bookmarks bar. Works on desktop and (with setup) mobile.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -71,8 +104,7 @@ export default function HomePage() {
             <FileCode className="h-10 w-10 text-green-400 mb-2" />
             <CardTitle>Userscript</CardTitle>
             <CardDescription>
-              Install via Tampermonkey or Greasemonkey. Runs automatically on Facebook following
-              pages with your saved settings.
+              Install via Tampermonkey. Runs on the correct Facebook pages with your settings.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -87,8 +119,7 @@ export default function HomePage() {
             <Puzzle className="h-10 w-10 text-purple-400 mb-2" />
             <CardTitle>Chrome Extension</CardTitle>
             <CardDescription>
-              Manifest V3 extension. Load unpacked from a zip. Popup lets you start/stop and see
-              live progress.
+              Manifest V3 extension (coming soon). Load unpacked from a zip.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -111,46 +142,15 @@ export default function HomePage() {
           <Zap className="h-8 w-8 text-yellow-400 mx-auto mb-3" />
           <h3 className="font-semibold">Anti-detection</h3>
           <p className="text-sm text-slate-400 mt-2">
-            Random jitter, configurable delays, cooldowns and daily caps so you stay under the
-            radar.
+            Random jitter, rate limits, cooldowns and daily caps so you stay under the radar.
           </p>
         </div>
         <div>
           <Lock className="h-8 w-8 text-green-400 mx-auto mb-3" />
           <h3 className="font-semibold">You control everything</h3>
           <p className="text-sm text-slate-400 mt-2">
-            Dry-run mode, target filters (profiles / pages / all), and full visibility of every
-            action in the console.
+            Dry-run mode, stop functions, and full visibility of every action in the console.
           </p>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8">
-        <h2 className="text-2xl font-bold text-center mb-8">3-tap unfollow flow</h2>
-        <div className="flex flex-col md:flex-row items-center justify-center gap-6 text-center">
-          <div className="flex-1">
-            <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center mx-auto text-xl font-bold">
-              1
-            </div>
-            <p className="mt-3 font-medium">Open following list</p>
-            <p className="text-sm text-slate-400">facebook.com/you/following</p>
-          </div>
-          <ArrowRight className="hidden md:block text-slate-600" />
-          <div className="flex-1">
-            <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center mx-auto text-xl font-bold">
-              2
-            </div>
-            <p className="mt-3 font-medium">Click the bookmark / extension</p>
-            <p className="text-sm text-slate-400">Script starts processing</p>
-          </div>
-          <ArrowRight className="hidden md:block text-slate-600" />
-          <div className="flex-1">
-            <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center mx-auto text-xl font-bold">
-              3
-            </div>
-            <p className="mt-3 font-medium">Watch the console</p>
-            <p className="text-sm text-slate-400">Safe delays + cooldowns</p>
-          </div>
         </div>
       </section>
     </div>

@@ -2,6 +2,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const entries = [
   {
+    version: "1.2.0",
+    date: "2026-10-17",
+    changes: [
+      "New mode: Auto Leave Groups",
+      "Runs on facebook.com/groups/joins",
+      "Dedicated settings: max/minute, base delay, jitter, scroll distance",
+      "Stop function: window.facebookAutoLeaveStop()",
+      "Dry-run support for leave groups",
+      "Mode switcher on the Configure page",
+      "Landing page and guide updated",
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-10-17",
     changes: [
@@ -11,7 +24,6 @@ const entries = [
       "Mobile-specific selectors for the following list",
       "simulateTap helper (pointer + touch + mouse events)",
       "Clearer mobile tips in the bookmarklet page and console",
-      "Recommended path: request Desktop site on mobile browsers",
     ],
   },
   {
