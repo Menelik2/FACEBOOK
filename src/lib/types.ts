@@ -1,4 +1,4 @@
-export type AppMode = "unfollow" | "leave-groups";
+export type AppMode = "unfollow" | "leave-groups" | "unfriend";
 
 export interface UnfollowConfig {
   MODE: AppMode;
@@ -21,6 +21,10 @@ export interface UnfollowConfig {
   JITTER: number;
   SCROLL_DISTANCE: number;
   SCROLL_DELAY_ON_EMPTY: number;
+  // Unfriend specific
+  UNFRIEND_DELAY: number;
+  UNFRIEND_SCROLL_AMOUNT: number;
+  UNFRIEND_SCROLL_WAIT: number;
 }
 
 export const DEFAULT_CONFIG: UnfollowConfig = {
@@ -42,4 +46,7 @@ export const DEFAULT_CONFIG: UnfollowConfig = {
   JITTER: 600,
   SCROLL_DISTANCE: 2200,
   SCROLL_DELAY_ON_EMPTY: 7000,
+  UNFRIEND_DELAY: 800,
+  UNFRIEND_SCROLL_AMOUNT: 1000,
+  UNFRIEND_SCROLL_WAIT: 1500,
 };
