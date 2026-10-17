@@ -1,11 +1,10 @@
 /** Shared progress overlay injected into generated Facebook scripts */
 export function getProgressUICode(title: string, accentColor: string): string {
-  // Returns plain JS (no outer template) that creates window.__FB_PROGRESS__
   return `
   (function createProgressUI() {
     if (document.getElementById('fb-studio-progress')) return;
     var style = document.createElement('style');
-    style.textContent = '#fb-studio-progress{position:fixed;bottom:24px;right:24px;z-index:999999;width:320px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.5);font-family:system-ui,-apple-system,sans-serif;overflow:hidden}' +
+    style.textContent = '#fb-studio-progress{position:fixed;bottom:24px;right:24px;z-index:999999;width:340px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.5);font-family:system-ui,-apple-system,sans-serif;overflow:hidden}' +
       '#fb-studio-progress .fb-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1e293b;border-bottom:1px solid #334155}' +
       '#fb-studio-progress .fb-title{font-weight:600;font-size:14px;color:${accentColor}}' +
       '#fb-studio-progress .fb-body{padding:14px 16px}' +
@@ -14,10 +13,11 @@ export function getProgressUICode(title: string, accentColor: string): string {
       '#fb-studio-progress .fb-bar-bg{height:8px;background:#1e293b;border-radius:99px;overflow:hidden}' +
       '#fb-studio-progress .fb-bar-fill{height:100%;width:0%;background:linear-gradient(90deg,${accentColor},#38bdf8);border-radius:99px;transition:width .35s ease}' +
       '#fb-studio-progress .fb-status{margin-top:8px;font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-      '#fb-studio-progress .fb-actions{display:flex;gap:8px;padding:0 16px 14px}' +
-      '#fb-studio-progress button{flex:1;border:none;border-radius:8px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer}' +
+      '#fb-studio-progress .fb-actions{display:flex;gap:6px;padding:0 16px 14px;flex-wrap:wrap}' +
+      '#fb-studio-progress button{flex:1;min-width:70px;border:none;border-radius:8px;padding:8px 0;font-size:12px;font-weight:600;cursor:pointer}' +
       '#fb-studio-progress .fb-stop{background:#dc2626;color:#fff}' +
-      '#fb-studio-progress .fb-min{background:#334155;color:#e2e8f0}';
+      '#fb-studio-progress .fb-min{background:#334155;color:#e2e8f0}' +
+      '#fb-studio-progress .fb-export{background:#0ea5e9;color:#fff}';
     document.head.appendChild(style);
     var root = document.createElement('div');
     root.id = 'fb-studio-progress';
@@ -28,15 +28,20 @@ export function getProgressUICode(title: string, accentColor: string): string {
       '<div class="fb-stat">Σ <strong id="fb-total">0</strong></div></div>' +
       '<div class="fb-bar-bg"><div class="fb-bar-fill" id="fb-bar"></div></div>' +
       '<div class="fb-status" id="fb-status">Starting…</div></div>' +
-      '<div class="fb-actions"><button class="fb-stop" id="fb-stop-btn">Stop</button>' +
-      '<button class="fb-min" id="fb-min-btn">Hide</button></div>';
+      '<div class="fb-actions">' +
+      '<button class="fb-stop" id="fb-stop-btn">Stop</button>' +
+      '<button class="fb-min" id="fb-min-btn">Hide</button>' +
+      '<button class="fb-export" id="fb-export-btn">Log</button></div>';
     document.body.appendChild(root);
     var hidden = false;
     document.getElementById('fb-min-btn').onclick = function() {
       hidden = !hidden;
       root.querySelector('.fb-body').style.display = hidden ? 'none' : 'block';
-      root.querySelector('.fb-actions').style.display = hidden ? 'none' : 'flex';
       document.getElementById('fb-min-btn').textContent = hidden ? 'Show' : 'Hide';
+    };
+    document.getElementById('fb-export-btn').onclick = function() {
+      if (window.__FB_ADV__ && window.__FB_ADV__.exportActionLog) window.__FB_ADV__.exportActionLog();
+      else alert('No action log yet');
     };
     window.__FB_PROGRESS__ = {
       success: 0, fail: 0, total: 0, cap: 0,
@@ -65,6 +70,7 @@ export function getProgressUICode(title: string, accentColor: string): string {
         this.update({ status: msg || 'Finished' });
         var btn = document.getElementById('fb-stop-btn');
         if (btn) { btn.textContent = 'Close'; btn.onclick = function() { root.remove(); }; }
+        if (window.__FB_ADV__ && window.__FB_ADV__.playFinishSound) window.__FB_ADV__.playFinishSound();
       },
       onStop: function(fn) {
         var btn = document.getElementById('fb-stop-btn');
