@@ -4,12 +4,15 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MotionDiv, MotionH1, MotionP } from "@/components/motion";
-import { Bookmark, Puzzle, FileCode, ArrowRight, Shield, Zap, Lock, Users, UserMinus, LogOut } from "lucide-react";
+import { Bookmark, Puzzle, FileCode, ArrowRight, Shield, Zap, Lock, Users, UserMinus, LogOut, Monitor } from "lucide-react";
 
 export default function HomePage() {
   return (
     <div className="space-y-20">
       <section className="text-center pt-12 pb-8">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-950/60 border border-amber-700/40 text-amber-200 text-xs mb-6">
+          <Monitor className="h-3.5 w-3.5" /> Desktop only — Chrome, Edge, Firefox, Safari
+        </div>
         <MotionH1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -26,8 +29,8 @@ export default function HomePage() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="mt-6 text-lg text-slate-400 max-w-2xl mx-auto"
         >
-          Unfollow · Leave Groups · Unfriend — safely, in one click. Configure, generate a
-          bookmarklet or userscript, and run it entirely in your browser.
+          Unfollow · Leave Groups · Unfriend — safely on desktop. Configure, generate a bookmarklet
+          or userscript, and run it entirely in your browser.
         </MotionP>
         <MotionDiv
           initial={{ opacity: 0, y: 20 }}
@@ -41,7 +44,7 @@ export default function HomePage() {
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link href="/guide">How it works</Link>
+            <Link href="/guide">Full user guide</Link>
           </Button>
         </MotionDiv>
       </section>
@@ -52,7 +55,7 @@ export default function HomePage() {
             <Users className="h-8 w-8 text-blue-400 mb-2" />
             <CardTitle>Unfollow</CardTitle>
             <CardDescription>
-              Clean your Following list. Profiles, pages, dry-run, jitter, daily caps, mobile support.
+              Clean your Following list. Profiles, pages, dry-run, jitter, daily caps.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -67,7 +70,7 @@ export default function HomePage() {
             <LogOut className="h-8 w-8 text-purple-400 mb-2" />
             <CardTitle>Leave Groups</CardTitle>
             <CardDescription>
-              Leave groups you no longer want. Rate limits + human-like delays on /groups/joins.
+              Leave groups you no longer want. Rate limits + human-like delays.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -82,7 +85,7 @@ export default function HomePage() {
             <UserMinus className="h-8 w-8 text-rose-400 mb-2" />
             <CardTitle>Unfriend</CardTitle>
             <CardDescription>
-              Remove friends in bulk from your Friends list. Confirm dialogs handled automatically.
+              Remove friends in bulk from your Friends list with confirm handling.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -98,7 +101,7 @@ export default function HomePage() {
           <CardHeader>
             <Bookmark className="h-10 w-10 text-blue-400 mb-2" />
             <CardTitle>Bookmarklet</CardTitle>
-            <CardDescription>Drag to bookmarks bar. Desktop + mobile (with setup).</CardDescription>
+            <CardDescription>Drag to bookmarks bar on desktop.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline" className="w-full">
@@ -138,17 +141,17 @@ export default function HomePage() {
         <div>
           <Shield className="h-8 w-8 text-blue-400 mx-auto mb-3" />
           <h3 className="font-semibold">Privacy first</h3>
-          <p className="text-sm text-slate-400 mt-2">Zero servers. Zero analytics. All state in your browser.</p>
+          <p className="text-sm text-slate-400 mt-2">Zero servers. All state in your browser.</p>
         </div>
         <div>
           <Zap className="h-8 w-8 text-yellow-400 mx-auto mb-3" />
           <h3 className="font-semibold">Anti-detection</h3>
-          <p className="text-sm text-slate-400 mt-2">Jitter, rate limits, cooldowns and daily caps.</p>
+          <p className="text-sm text-slate-400 mt-2">Jitter, rate limits, cooldowns, daily caps.</p>
         </div>
         <div>
           <Lock className="h-8 w-8 text-green-400 mx-auto mb-3" />
           <h3 className="font-semibold">Full control</h3>
-          <p className="text-sm text-slate-400 mt-2">Dry-run, stop functions, console visibility.</p>
+          <p className="text-sm text-slate-400 mt-2">Dry-run, progress bar, stop anytime.</p>
         </div>
       </section>
     </div>

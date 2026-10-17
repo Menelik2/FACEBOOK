@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react";
 import { useConfigStore } from "@/store/config-store";
 import { generateScript } from "@/lib/generate-script";
+import { generateLeaveGroupsScript } from "@/lib/generate-leave-groups";
+import { generateUnfriendScript } from "@/lib/generate-unfriend";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bookmark, Smartphone, Monitor, AlertTriangle } from "lucide-react";
+import { Bookmark, Monitor, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 
 export default function BookmarkletPage() {
   const { config } = useConfigStore();
@@ -16,15 +19,26 @@ export default function BookmarkletPage() {
 
   if (!mounted) return null;
 
-  const bookmarklet = generateScript(config);
+  const bookmarklet =
+    config.MODE === "leave-groups"
+      ? generateLeaveGroupsScript(config)
+      : config.MODE === "unfriend"
+      ? generateUnfriendScript(config)
+      : generateScript(config);
+
+  const label =
+    config.MODE === "leave-groups"
+      ? "▶ FB Leave Groups"
+      : config.MODE === "unfriend"
+      ? "▶ FB Auto Unfriend"
+      : "▶ FB Auto Unfollow";
 
   const runTest = () => {
     setTestLog([
-      "[Test] Bookmarklet environment check…",
-      "[OK] javascript: protocol is allowed in this browser context for testing.",
-      "[OK] Script generation succeeded (includes mobile improvements).",
-      "[Info] Real run must happen on facebook.com or m.facebook.com following list.",
-      "Open your following list, then click the bookmark you saved.",
+      "[Test] Desktop bookmarklet check…",
+      "[OK] Script generated for mode: " + config.MODE,
+      "[OK] Desktop-only guard is included in the script.",
+      "[Info] Run only on facebook.com desktop site — not m.facebook.com or phone browsers.",
     ]);
   };
 
@@ -32,8 +46,18 @@ export default function BookmarkletPage() {
     <div className="space-y-8 max-w-3xl mx-auto">
       <div className="text-center">
         <h1 className="text-3xl font-bold">Bookmarklet Installer</h1>
-        <p className="text-slate-400 mt-2">One-click run from your bookmarks bar · Mobile improved</p>
+        <p className="text-slate-400 mt-2">Desktop only · Drag to bookmarks bar</p>
       </div>
+
+      <Card className="bg-amber-950/40 border-amber-700/50">
+        <CardContent className="pt-6 flex gap-3 text-sm text-amber-100">
+          <Monitor className="h-5 w-5 shrink-0 text-amber-400" />
+          <div>
+            <strong>Desktop browsers only.</strong> Use Chrome, Edge, Firefox, or Safari on a computer.
+            Mobile is blocked by the script.
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
@@ -42,77 +66,33 @@ export default function BookmarkletPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4">
+          <p className="text-xs text-slate-500">
+            Current mode: <strong className="text-slate-300">{config.MODE}</strong>{" "}
+            · Change on <Link href="/configure" className="text-blue-400 underline">Configure</Link>
+          </p>
           <a
             href={bookmarklet}
-            className="inline-flex items-center justify-center px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold shadow-lg shadow-blue-900/40 cursor-grab active:cursor-grabbing"
+            className="inline-flex items-center justify-center px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold shadow-lg cursor-grab active:cursor-grabbing"
             onClick={(e) => {
               e.preventDefault();
               alert("Drag this button to your bookmarks bar instead of clicking it.");
             }}
             draggable
           >
-            ▶ FB Auto Unfollow
+            {label}
           </a>
-          <p className="text-sm text-slate-400 text-center">
-            Drag the blue button above into the bookmarks bar of Chrome, Firefox, Edge or Safari.
-          </p>
-        </CardContent>
-      </Card>
-
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Monitor className="h-4 w-4" /> Desktop
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-slate-300 space-y-2">
-            <ol className="list-decimal list-inside space-y-1">
-              <li>Show the bookmarks bar (Ctrl+Shift+B / Cmd+Shift+B)</li>
-              <li>Drag the blue button into the bar</li>
-              <li>Go to facebook.com → your profile → Following</li>
-              <li>Click the bookmark</li>
-            </ol>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Smartphone className="h-4 w-4" /> Mobile (improved)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-slate-300 space-y-2">
-            <ol className="list-decimal list-inside space-y-1">
-              <li>On Configure page, copy the generated javascript: URL</li>
-              <li>In Chrome/Safari create a new bookmark</li>
-              <li>Paste the javascript: URL as the address</li>
-              <li>Open your Following list (m.facebook.com or desktop site)</li>
-              <li>Tap the bookmark</li>
-            </ol>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="bg-amber-950/40 border-amber-700/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-amber-200 text-base">
-            <AlertTriangle className="h-4 w-4" /> Best results on mobile
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-amber-100/90 space-y-2">
-          <p>
-            <strong>Recommended:</strong> Open <code className="bg-slate-900 px-1 rounded">facebook.com</code> in your mobile browser and request the <strong>Desktop site</strong>. Then run the bookmarklet. This uses the much more reliable desktop selectors.
-          </p>
-          <p>
-            Pure <code className="bg-slate-900 px-1 rounded">m.facebook.com</code> support is improved (touch events + mobile selectors) but still less reliable because Facebook changes the mobile DOM often.
-          </p>
+          <ol className="text-sm text-slate-300 space-y-1 list-decimal list-inside text-left w-full max-w-md">
+            <li>Show bookmarks bar: <code className="bg-slate-800 px-1 rounded">Ctrl+Shift+B</code> / <code className="bg-slate-800 px-1 rounded">Cmd+Shift+B</code></li>
+            <li>Drag the button above into the bar</li>
+            <li>Open the correct Facebook page (Following / Groups / Friends)</li>
+            <li>Click the bookmark</li>
+          </ol>
         </CardContent>
       </Card>
 
       <Card className="bg-slate-900 border-slate-800">
         <CardHeader>
-          <CardTitle>Test on this page</CardTitle>
+          <CardTitle>Test generation</CardTitle>
         </CardHeader>
         <CardContent>
           <Button onClick={runTest} variant="outline">
@@ -125,6 +105,12 @@ export default function BookmarkletPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="text-center text-sm">
+        <Link href="/guide" className="text-blue-400 hover:underline">
+          Full step-by-step guide with pictures →
+        </Link>
+      </div>
     </div>
   );
 }

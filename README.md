@@ -1,23 +1,23 @@
 # FB Unfollow Studio
 
-**Take back control of your Facebook — Unfollow · Leave Groups · Unfriend**
+**Desktop only** · Unfollow · Leave Groups · Unfriend
 
-A production-ready Next.js 14 configurator that generates personalized Facebook automation scripts:
+Configure and generate Facebook automation scripts (bookmarklet / userscript / raw JS). 100% client-side.
 
-| Mode | Target page | Stop command |
-|------|-------------|--------------|
-| **Unfollow** | `/you/following` | — |
+| Mode | Target page | Stop |
+|------|-------------|------|
+| **Unfollow** | `/you/following` | Progress panel Stop |
 | **Leave Groups** | `/groups/joins` | `window.facebookAutoLeaveStop()` |
 | **Unfriend** | `/you/friends` | `window.facebookUnfriendStop()` |
 
-Output formats: **Bookmarklet**, **Userscript** (Tampermonkey), **raw JS** (DevTools paste).
+## Requirements
 
-100% client-side. No backend, no analytics, no Facebook API.
+- **Desktop browser only** (Chrome, Edge, Firefox, Safari)
+- Mobile / `m.facebook.com` is blocked by the scripts
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-This tool automates clicks on Facebook. Meta’s Terms of Service prohibit automation.  
-**Use a secondary / backup account. Use at your own risk. Start with Dry Run.**
+Meta ToS prohibit automation. Use a secondary account. Start with Dry Run. Use at your own risk.
 
 ## Quick start
 
@@ -28,18 +28,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Deploy
-
-Connect the repo to [Vercel](https://vercel.com) — zero config.
-
-## Tech stack
-
-- Next.js 14 (App Router) + TypeScript
-- Tailwind CSS + Radix UI
-- Zustand (localStorage)
-- Framer Motion
+See **Guide** in the app for full step-by-step instructions with visual walkthroughs.
 
 ## License
 

@@ -2,42 +2,34 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const entries = [
   {
-    version: "1.4.0",
+    version: "1.5.0",
     date: "2026-10-17",
     changes: [
-      "Live progress overlay on Facebook pages for all modes",
-      "Shows ✅ success, ❌ failed, total count + animated progress bar",
-      "Stop and Hide buttons on the overlay",
-      "Wired into Unfollow, Leave Groups, and Unfriend scripts",
+      "Desktop-only: scripts refuse to run on mobile / m.facebook.com",
+      "Full visual step-by-step user guide for Unfollow, Leave Groups, Unfriend",
+      "Mock browser illustrations + progress panel preview in the Guide",
+      "Landing and Bookmarklet pages updated for desktop-only messaging",
     ],
   },
   {
-    version: "1.3.1",
+    version: "1.4.0",
     date: "2026-10-17",
-    changes: [
-      "Fixed Unfriend tracking (profile URL instead of DOM nodes)",
-      "Better stop conditions for Unfriend",
-    ],
+    changes: ["Live progress overlay on Facebook for all modes"],
   },
   {
     version: "1.3.0",
     date: "2026-10-17",
-    changes: ["New mode: Auto Unfriend"],
+    changes: ["Auto Unfriend mode"],
   },
   {
     version: "1.2.0",
     date: "2026-10-17",
-    changes: ["New mode: Auto Leave Groups"],
-  },
-  {
-    version: "1.1.0",
-    date: "2026-10-17",
-    changes: ["Improved mobile support for Unfollow"],
+    changes: ["Auto Leave Groups mode"],
   },
   {
     version: "1.0.0",
     date: "2026-10-17",
-    changes: ["Initial release"],
+    changes: ["Initial release — Unfollow"],
   },
 ];
 
@@ -46,7 +38,6 @@ export default function ChangelogPage() {
     <div className="space-y-8 max-w-3xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold">Changelog</h1>
-        <p className="text-slate-400 mt-2">Version history</p>
       </div>
       {entries.map((entry) => (
         <Card key={entry.version} className="bg-slate-900 border-slate-800">
