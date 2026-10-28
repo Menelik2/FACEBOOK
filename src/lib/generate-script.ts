@@ -31,7 +31,7 @@ ${progressCode}
 
 (async function () {
   'use strict';
-  console.log('%c[FB Unfollow v1.7] Started', 'color:#1877F2;font-weight:bold;');
+  console.log('%c[FB Unfollow v1.8] Started', 'color:#1877F2;font-weight:bold;');
 
   const INTERVAL_BETWEEN_ACTIONS = ${INTERVAL_BETWEEN_ACTIONS};
   const SHORT_FIXED_PAUSE = ${SHORT_FIXED_PAUSE};
@@ -47,14 +47,16 @@ ${progressCode}
   let successCount = 0;
   let failCount = 0;
   let emptyScrolls = 0;
-  let processActive = true;
+  let running = true;
   let actionsThisSession = 0;
 
-  function syncProgress(status) {
+  function sync(status) {
     if (window.__FB_PROGRESS__) {
       window.__FB_PROGRESS__.update({
-        success: successCount, fail: failCount,
-        total: successCount + failCount, status: status
+        success: successCount,
+        fail: failCount,
+        total: successCount + failCount,
+        status: status
       });
     }
   }
@@ -62,211 +64,190 @@ ${progressCode}
   if (window.__FB_PROGRESS__) {
     window.__FB_PROGRESS__.cap = DAILY_CAP;
     window.__FB_PROGRESS__.onStop(function () {
-      processActive = false;
-      syncProgress('Stopping…');
+      running = false;
+      sync('Stopping…');
     });
-    window.__FB_PROGRESS__.update({ status: DRY_RUN ? 'Dry run mode' : 'Running…', cap: DAILY_CAP });
+    window.__FB_PROGRESS__.update({ status: DRY_RUN ? 'Dry run' : 'Running…', cap: DAILY_CAP });
   }
 
-  const wait = function (ms) {
-    var actual = ms;
-    if (RANDOM_JITTER) {
-      var jitter = ms * 0.25 * (Math.random() * 2 - 1);
-      actual = Math.max(120, Math.round(ms + jitter));
-    }
-    return new Promise(function (r) { setTimeout(r, actual); });
-  };
-
-  function norm(s) {
-    return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  function sleep(ms) {
+    var t = ms;
+    if (RANDOM_JITTER) t = Math.max(100, Math.round(ms + ms * 0.2 * (Math.random() * 2 - 1)));
+    return new Promise(function (r) { setTimeout(r, t); });
   }
 
-  function rawText(el) {
-    if (!el) return '';
-    var aria = el.getAttribute ? (el.getAttribute('aria-label') || el.getAttribute('title') || '') : '';
-    return String(aria + ' ' + (el.innerText || el.textContent || '')).replace(/\s+/g, ' ').trim();
-  }
-
-  function textOf(el) { return norm(rawText(el)); }
-
-  function isVisible(el) {
+  function visible(el) {
     if (!el || !el.isConnected) return false;
     try {
       var r = el.getBoundingClientRect();
-      return r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < (window.innerHeight + 100);
+      return r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < innerHeight + 120;
     } catch (e) { return false; }
   }
 
-  function isTargetMatch(url) {
-    var path = String(url || '').toLowerCase();
-    var isPage = /\/pages\/|\/pg\/|\/page\//.test(path);
-    if (TARGET === 'pages') return isPage;
-    if (TARGET === 'profiles') return !isPage;
-    return true;
+  function label(el) {
+    if (!el) return '';
+    return String(
+      (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title') || '')) +
+      ' ' +
+      (el.innerText || el.textContent || '')
+    ).replace(/\s+/g, ' ').trim();
   }
 
-  // EN + Amharic (and common variants). Amharic Facebook uses localized labels.
-  function isFollowingBtn(el) {
-    if (!el || !isVisible(el)) return false;
+  function low(el) { return label(el).toLowerCase(); }
+
+  function isFollowing(el) {
+    if (!el || !visible(el)) return false;
     if (el.getAttribute && el.getAttribute('aria-disabled') === 'true') return false;
-    var t = textOf(el);
-    var raw = rawText(el);
-    // English
-    if (/^(following|followed|liked|subscribed)\b/.test(t)) return true;
-    if (/\bfollowing\b/.test(t) && !/unfollow|unlike/.test(t)) return true;
-    if (/\bliked\b/.test(t) && !/unlike/.test(t)) return true;
-    // Amharic — በመከተል ላይ (following), ተወዳጅ / ወድጄዋለሁ style likes
-    if (/በመከተል/.test(raw)) return true;
-    if (/ተወዳጅ|ወድጄ/.test(raw) && !/አትወድ|አታስወግድ/.test(raw)) return true;
+    var t = low(el);
+    var r = label(el);
+    if (t.indexOf('unfollow') !== -1 || t.indexOf('unlike') !== -1) return false;
+    if (t.indexOf('following') !== -1 || t.indexOf('followed') !== -1) return true;
+    if (t === 'liked' || t.indexOf('liked') === 0 || t.indexOf('subscribed') === 0) return true;
+    if (r.indexOf('በመከተል') !== -1) return true;
+    if ((r.indexOf('ተወዳጅ') !== -1 || r.indexOf('ወድጄ') !== -1) && r.indexOf('አት') === -1) return true;
     return false;
   }
 
-  function isActionsBtn(el) {
-    if (!el || !isVisible(el)) return false;
-    var aria = (el.getAttribute && el.getAttribute('aria-label')) || '';
-    var t = norm(aria + ' ' + (el.innerText || ''));
-    var raw = rawText(el);
-    if (/\b(actions|more options|more)\b/.test(t)) return true;
-    if (aria === '…' || aria === '...' || aria === '•••') return true;
-    // Amharic "more" / options approximations
-    if (/ተጨማሪ|አማራጮች|እርምጃዎች/.test(raw)) return true;
-    // Icon-only three-dot often has empty/short label but contains svg circles
-    if ((!aria || aria.length < 3) && el.querySelector && el.querySelector('svg circle, svg[viewBox]')) {
-      var parentHasProfile = el.parentElement && el.parentElement.querySelector('a[href*="facebook.com"], a[href^="/"]');
-      if (parentHasProfile) return true;
-    }
+  function isActions(el) {
+    if (!el || !visible(el)) return false;
+    var a = (el.getAttribute && el.getAttribute('aria-label')) || '';
+    var t = (a + ' ' + (el.innerText || '')).toLowerCase();
+    if (t.indexOf('actions') !== -1 || t.indexOf('more options') !== -1) return true;
+    if (t === 'more' || a === 'More' || a === '…' || a === '...' || a === '•••') return true;
+    if (/ተጨማሪ|አማራጮች|እርምጃዎች/.test(a + (el.innerText || ''))) return true;
     return false;
   }
 
-  function isUnfollowItem(el) {
-    if (!el || !isVisible(el)) return false;
-    var t = textOf(el);
-    var raw = rawText(el);
-    if (/^(unfollow|unfollow page|unfollow person|unlike|unsubscribe)\b/.test(t)) return true;
-    if (/^unfollow\b|^unlike\b/.test(t)) return true;
-    // Amharic unfollow-ish
-    if (/አትከተል|መከተልን አቁም|መከተል አቁም|አታስከተል|ከመከተል ውጣ/.test(raw)) return true;
-    if (/unlike|አታስወድድ|አትውደድ/.test(raw)) return true;
+  function isUnfollow(el) {
+    if (!el || !visible(el)) return false;
+    var t = low(el);
+    var r = label(el);
+    if (t.indexOf('unfollow') !== -1) return true;
+    if (t === 'unlike' || t.indexOf('unlike') === 0) return true;
+    if (t.indexOf('unsubscribe') !== -1) return true;
+    if (/አትከተል|መከተልን አቁም|መከተል አቁም|አታስከተል|ከመከተል/.test(r)) return true;
     return false;
   }
 
-  function isConfirmBtn(el) {
-    if (!el || !isVisible(el)) return false;
-    var t = textOf(el);
-    var raw = rawText(el);
-    if (/^(unfollow|confirm|remove|update|yes|ok)\b/.test(t)) return true;
-    if (/አረጋግጥ|እሺ|አዎ|አዘምን|ሰርዝ/.test(raw)) return true;
+  function isConfirm(el) {
+    if (!el || !visible(el)) return false;
+    var t = low(el);
+    var r = label(el);
+    if (t === 'unfollow' || t === 'confirm' || t === 'update' || t === 'remove' || t === 'yes' || t === 'ok') return true;
+    if (t.indexOf('confirm') === 0 || t.indexOf('update') === 0) return true;
+    if (/አረጋግጥ|እሺ|አዎ|አዘምን/.test(r)) return true;
     return false;
   }
 
-  function clickEl(el) {
+  function click(el) {
     if (!el) return;
     try {
-      el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
-      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      el.focus && el.focus();
+      ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach(function (type) {
+        el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+      });
     } catch (e) {
       try { el.click(); } catch (e2) {}
     }
   }
 
-  function closeMenus() {
+  function esc() {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
   }
 
-  // Diagnostic: log what the page actually shows
-  function diagnose() {
-    var btns = Array.from(document.querySelectorAll('[role="button"], button, [role="menuitem"]'))
-      .filter(isVisible)
-      .slice(0, 40)
-      .map(function (el) {
-        return {
-          text: rawText(el).slice(0, 60),
-          aria: (el.getAttribute && el.getAttribute('aria-label')) || '',
-          tag: el.tagName
-        };
-      })
-      .filter(function (b) { return b.text || b.aria; });
-    console.log('%c[FB DIAG] URL: ' + location.href, 'color:#00B0FF');
-    console.log('%c[FB DIAG] Visible controls (first 40):', 'color:#00B0FF', btns);
-    var followCount = btns.filter(function (b) {
-      var t = norm(b.text + ' ' + b.aria);
-      return /follow|like|በመከተል|ተወዳጅ/.test(t);
-    }).length;
-    console.log('%c[FB DIAG] Possible follow-related: ' + followCount, 'color:#00B0FF');
-    return btns;
+  function targetOk(url) {
+    var p = String(url || '').toLowerCase();
+    var page = p.indexOf('/pages/') !== -1 || p.indexOf('/pg/') !== -1;
+    if (TARGET === 'pages') return page;
+    if (TARGET === 'profiles') return !page;
+    return true;
   }
 
-  function getCards() {
-    var cards = [];
+  function findUnfollowInPage() {
+    var nodes = document.querySelectorAll('[role="menuitem"], [role="button"], div[role="button"], button, span[role="button"]');
+    for (var i = 0; i < nodes.length; i++) {
+      if (isUnfollow(nodes[i])) return nodes[i];
+    }
+    return null;
+  }
+
+  function findConfirmInPage() {
+    var nodes = document.querySelectorAll('[role="dialog"] button, [role="dialog"] [role="button"], [role="alertdialog"] button, button, [role="button"]');
+    for (var i = 0; i < nodes.length; i++) {
+      if (isConfirm(nodes[i])) return nodes[i];
+    }
+    return null;
+  }
+
+  // Collect unfollow targets — PRIMARY: Actions/More (current FB), SECONDARY: Following btn
+  function getTargets() {
+    var out = [];
     var seen = new Set();
 
-    function addCard(btn, viaActions) {
-      var root = btn;
-      for (var i = 0; i < 12 && root && root !== document.body; i++) {
-        root = root.parentElement;
-        if (!root) break;
-        var link = root.querySelector('a[href*="facebook.com/"], a[href^="/"]');
-        if (link && link.href) {
-          var key = link.href.split('?')[0].split('#')[0];
-          if (seen.has(key)) return;
-          if (!isTargetMatch(key)) return;
-          if (/\/(photo|photos|reel|reels|watch|groups|marketplace|events|stories)\b/i.test(key)) return;
-          seen.add(key);
-          cards.push({
-            root: root,
-            btn: btn,
-            url: key,
-            name: (link.innerText || link.getAttribute('aria-label') || key).trim().slice(0, 80),
-            viaActions: !!viaActions
-          });
-          return;
-        }
+    function attach(btn, kind) {
+      var node = btn;
+      for (var d = 0; d < 12 && node && node !== document.body; d++) {
+        node = node.parentElement;
+        if (!node) break;
+        var link = node.querySelector('a[href*="facebook.com/"], a[href^="/"]');
+        if (!link || !link.href) continue;
+        var key = link.href.split('?')[0].split('#')[0];
+        if (seen.has(key) || processed.has(key)) return;
+        if (!targetOk(key)) return;
+        if (/\/(photo|photos|reel|reels|watch|groups\/|marketplace|events|stories)\b/i.test(key)) return;
+        seen.add(key);
+        out.push({
+          root: node,
+          btn: btn,
+          url: key,
+          name: (link.innerText || link.getAttribute('aria-label') || '').trim().slice(0, 60),
+          kind: kind
+        });
+        return;
       }
     }
 
-    Array.from(document.querySelectorAll('[role="button"], button, span[role="button"]'))
-      .filter(isFollowingBtn)
-      .forEach(function (btn) { addCard(btn, false); });
+    // A) 3-dot Actions / More — most reliable on 2025–2026 Following list
+    Array.from(document.querySelectorAll('div[aria-label][role="button"], div[role="button"][aria-label], button[aria-label]'))
+      .filter(isActions)
+      .forEach(function (b) { attach(b, 'actions'); });
 
-    if (cards.length === 0) {
-      Array.from(document.querySelectorAll('div[aria-label][role="button"], div[role="button"][aria-label], button[aria-label]'))
-        .filter(isActionsBtn)
-        .forEach(function (btn) { addCard(btn, true); });
-    }
+    // B) Following / Liked buttons
+    Array.from(document.querySelectorAll('[role="button"], button'))
+      .filter(isFollowing)
+      .forEach(function (b) { attach(b, 'following'); });
 
-    // Last resort: any row with a profile link + any button nearby
-    if (cards.length === 0) {
+    // C) Fallback: profile rows with any button
+    if (out.length === 0) {
       Array.from(document.querySelectorAll('a[href*="facebook.com/"], a[href^="/"]')).forEach(function (link) {
-        if (!isVisible(link)) return;
+        if (!visible(link)) return;
         var key = (link.href || '').split('?')[0];
-        if (!key || seen.has(key) || !isTargetMatch(key)) return;
+        if (!key || seen.has(key) || processed.has(key) || !targetOk(key)) return;
         if (/\/(photo|reel|watch|groups|marketplace)\b/i.test(key)) return;
         var node = link;
-        for (var d = 0; d < 8 && node; d++) {
+        for (var d = 0; d < 9 && node; d++) {
           node = node.parentElement;
           if (!node) break;
-          var btns = Array.from(node.querySelectorAll('[role="button"], button')).filter(isVisible);
-          if (btns.length > 0) {
-            seen.add(key);
-            cards.push({
-              root: node,
-              btn: btns.find(isFollowingBtn) || btns.find(isActionsBtn) || btns[0],
-              url: key,
-              name: (link.innerText || '').trim().slice(0, 80),
-              viaActions: !isFollowingBtn(btns[0])
-            });
-            break;
-          }
+          var btns = Array.from(node.querySelectorAll('[role="button"], button')).filter(visible);
+          if (!btns.length) continue;
+          var prefer = btns.find(isFollowing) || btns.find(isActions) || btns[btns.length - 1];
+          seen.add(key);
+          out.push({
+            root: node,
+            btn: prefer,
+            url: key,
+            name: (link.innerText || '').trim().slice(0, 60),
+            kind: isFollowing(prefer) ? 'following' : (isActions(prefer) ? 'actions' : 'any')
+          });
+          break;
         }
       });
     }
 
-    return cards.filter(function (c) { return !processed.has(c.url); });
+    return out;
   }
 
-  async function unfollowOne(card) {
+  async function doUnfollow(card) {
     if (DRY_RUN) {
       console.log('%c[DRY RUN]', 'color:#FFCC00;', card.name || card.url);
       return true;
@@ -277,200 +258,183 @@ ${progressCode}
     } catch (e) {
       try { card.root.scrollIntoView({ block: 'center' }); } catch (e2) {}
     }
-    await wait(450);
+    await sleep(400);
 
-    // Path 1: Following / Liked
-    if (card.btn && isFollowingBtn(card.btn)) {
-      console.log('[FB] Click Following-type:', rawText(card.btn), '|', card.name);
-      clickEl(card.btn);
-      await wait(SHORT_FIXED_PAUSE + 500);
-
-      var item = Array.from(document.querySelectorAll(
-        '[role="menuitem"], [role="button"], div[role="button"], button, span[role="button"]'
-      )).find(isUnfollowItem);
-
-      if (!item) {
-        await wait(700);
-        item = Array.from(document.querySelectorAll(
-          '[role="menuitem"], [role="button"], div[role="button"], button'
-        )).find(isUnfollowItem);
-      }
-
-      if (item) {
-        console.log('[FB] Click Unfollow item:', rawText(item));
-        clickEl(item);
-        await wait(SHORT_FIXED_PAUSE + 400);
-        var conf = Array.from(document.querySelectorAll(
-          '[role="dialog"] button, [role="dialog"] [role="button"], [role="alertdialog"] button, button'
-        )).find(isConfirmBtn);
-        if (conf) {
-          console.log('[FB] Confirm:', rawText(conf));
-          clickEl(conf);
-          await wait(SHORT_FIXED_PAUSE);
-        }
-        await wait(600);
-        return true;
-      }
-      console.warn('[FB] No Unfollow item after Following click. Menu texts:', 
-        Array.from(document.querySelectorAll('[role="menuitem"], [role="menu"] [role="button"]'))
-          .filter(isVisible).map(rawText).slice(0, 10));
-      closeMenus();
-      await wait(250);
-    }
-
-    // Path 2: Actions / More / ⋯
-    var actionsBtn = (card.viaActions && card.btn) ? card.btn : null;
+    // --- Path: Actions / More first when available ---
+    var actionsBtn = card.kind === 'actions' ? card.btn : null;
     if (!actionsBtn) {
-      actionsBtn = Array.from(card.root.querySelectorAll(
-        '[role="button"], button'
-      )).find(isActionsBtn);
+      actionsBtn = Array.from(card.root.querySelectorAll('[role="button"], button')).find(isActions);
     }
     if (!actionsBtn && card.root.parentElement) {
-      actionsBtn = Array.from(card.root.parentElement.querySelectorAll(
-        '[role="button"], button'
-      )).find(isActionsBtn);
+      actionsBtn = Array.from(card.root.parentElement.querySelectorAll('[role="button"], button')).find(isActions);
     }
 
     if (actionsBtn) {
-      console.log('[FB] Click Actions/More:', rawText(actionsBtn), '|', card.name);
-      clickEl(actionsBtn);
-      await wait(SHORT_FIXED_PAUSE + 600);
+      console.log('[FB] Actions menu →', card.name || card.url);
+      click(actionsBtn);
+      await sleep(SHORT_FIXED_PAUSE + 500);
 
-      var unf = Array.from(document.querySelectorAll(
-        '[role="menuitem"], [role="button"], div[role="button"], button'
-      )).find(isUnfollowItem);
-
-      if (!unf) {
-        await wait(700);
-        unf = Array.from(document.querySelectorAll(
-          '[role="menuitem"], [role="button"], div[role="button"], button'
-        )).find(isUnfollowItem);
-      }
+      var unf = findUnfollowInPage();
+      if (!unf) { await sleep(600); unf = findUnfollowInPage(); }
 
       if (unf) {
-        console.log('[FB] Click Unfollow from menu:', rawText(unf));
-        clickEl(unf);
-        await wait(SHORT_FIXED_PAUSE + 400);
-        var conf2 = Array.from(document.querySelectorAll(
-          '[role="dialog"] button, [role="dialog"] [role="button"], button'
-        )).find(isConfirmBtn);
-        if (conf2) {
-          clickEl(conf2);
-          await wait(SHORT_FIXED_PAUSE);
-        }
-        await wait(600);
+        console.log('[FB] Unfollow →', label(unf));
+        click(unf);
+        await sleep(SHORT_FIXED_PAUSE + 350);
+        var conf = findConfirmInPage();
+        if (conf) { click(conf); await sleep(SHORT_FIXED_PAUSE); }
+        await sleep(500);
         return true;
       }
 
-      console.warn('[FB] Unfollow not in menu. Items:',
-        Array.from(document.querySelectorAll('[role="menuitem"], [role="menu"] *'))
-          .filter(isVisible).map(rawText).filter(Boolean).slice(0, 15));
-      closeMenus();
-      return false;
+      console.warn('[FB] No Unfollow in Actions menu. Items:',
+        Array.from(document.querySelectorAll('[role="menuitem"], [role="menu"] [role="button"]'))
+          .filter(visible).map(label).slice(0, 12));
+      esc();
+      await sleep(200);
     }
 
-    // Path 3: click whatever button is on the card and hope menu appears
+    // --- Path: Following / Liked button ---
+    var followBtn = isFollowing(card.btn) ? card.btn : Array.from(card.root.querySelectorAll('[role="button"], button')).find(isFollowing);
+    if (followBtn) {
+      console.log('[FB] Following btn →', card.name || card.url, label(followBtn));
+      click(followBtn);
+      await sleep(SHORT_FIXED_PAUSE + 500);
+
+      var unf2 = findUnfollowInPage();
+      if (!unf2) { await sleep(600); unf2 = findUnfollowInPage(); }
+
+      if (unf2) {
+        console.log('[FB] Unfollow →', label(unf2));
+        click(unf2);
+        await sleep(SHORT_FIXED_PAUSE + 350);
+        var conf2 = findConfirmInPage();
+        if (conf2) { click(conf2); await sleep(SHORT_FIXED_PAUSE); }
+        await sleep(500);
+        return true;
+      }
+
+      console.warn('[FB] No Unfollow after Following click');
+      esc();
+      await sleep(200);
+    }
+
+    // --- Last resort: click card button ---
     if (card.btn) {
-      console.log('[FB] Fallback click card button:', rawText(card.btn));
-      clickEl(card.btn);
-      await wait(SHORT_FIXED_PAUSE + 600);
-      var anyUnf = Array.from(document.querySelectorAll(
-        '[role="menuitem"], [role="button"], button'
-      )).find(isUnfollowItem);
-      if (anyUnf) {
-        clickEl(anyUnf);
-        await wait(SHORT_FIXED_PAUSE + 400);
+      console.log('[FB] Fallback click →', label(card.btn));
+      click(card.btn);
+      await sleep(SHORT_FIXED_PAUSE + 600);
+      var unf3 = findUnfollowInPage();
+      if (unf3) {
+        click(unf3);
+        await sleep(SHORT_FIXED_PAUSE + 350);
+        var conf3 = findConfirmInPage();
+        if (conf3) click(conf3);
+        await sleep(500);
         return true;
       }
-      closeMenus();
+      esc();
     }
 
-    console.warn('[FB] Could not unfollow', card.name || card.url);
     return false;
   }
 
-  // ---- Start ----
-  diagnose();
-  syncProgress('Scanning…');
+  // Startup diagnostics
+  (function diag() {
+    console.log('[FB] URL:', location.href);
+    var sample = Array.from(document.querySelectorAll('[role="button"], button'))
+      .filter(visible)
+      .slice(0, 25)
+      .map(function (el) { return label(el).slice(0, 50); })
+      .filter(Boolean);
+    console.log('[FB] Sample buttons:', sample);
+    console.log('[FB] Actions-like:', sample.filter(function (s) {
+      var x = s.toLowerCase();
+      return x.indexOf('action') !== -1 || x.indexOf('more') !== -1;
+    }));
+    console.log('[FB] Following-like:', sample.filter(function (s) {
+      var x = s.toLowerCase();
+      return x.indexOf('following') !== -1 || x.indexOf('liked') !== -1 || s.indexOf('በመከተል') !== -1;
+    }));
+  })();
 
-  var path = (location.pathname || '').toLowerCase();
-  if (path.indexOf('following') === -1 && path.indexOf('friends') === -1 && path.indexOf('likes') === -1) {
-    console.warn('[FB] Tip: open Profile → Friends → Following (or /me/following)');
+  if ((location.pathname || '').toLowerCase().indexOf('following') === -1 &&
+      (location.pathname || '').toLowerCase().indexOf('friends') === -1) {
+    console.warn('[FB] Open: https://www.facebook.com/me/following');
   }
 
-  while (processActive) {
-    var cards = getCards();
-    console.log('[FB] Cards found:', cards.length);
+  while (running) {
+    var targets = getTargets();
+    console.log('[FB] Targets:', targets.length);
 
-    if (cards.length === 0) {
+    if (!targets.length) {
       emptyScrolls++;
-      syncProgress('Scrolling… (' + emptyScrolls + '/' + MAX_SCROLL_ATTEMPTS + ')');
-      if (emptyScrolls >= MAX_SCROLL_ATTEMPTS) {
-        processActive = false;
-        break;
-      }
-      window.scrollBy(0, Math.max(700, window.innerHeight * 0.9));
-      await wait(2000);
+      sync('Scrolling… ' + emptyScrolls + '/' + MAX_SCROLL_ATTEMPTS);
+      if (emptyScrolls >= MAX_SCROLL_ATTEMPTS) break;
+      window.scrollBy(0, Math.max(800, Math.floor(innerHeight * 0.9)));
+      await sleep(2000);
       continue;
     }
 
     emptyScrolls = 0;
-    var card = cards[0];
+
+    // Process last visible first (bottom-up) — more stable when FB removes rows
+    var card = targets[targets.length - 1];
     processed.add(card.url);
-    syncProgress('Processing: ' + (card.name || '').slice(0, 24));
+    sync('Working: ' + (card.name || 'account').slice(0, 22));
 
     var ok = false;
     try {
-      ok = await unfollowOne(card);
+      ok = await doUnfollow(card);
     } catch (err) {
-      console.error('[FB] Error', err);
-      closeMenus();
+      console.error('[FB]', err);
+      esc();
       ok = false;
     }
 
     if (ok) {
       successCount++;
       actionsThisSession++;
-      syncProgress('Unfollowed ' + successCount);
-      console.log('%c✅ ' + successCount + ' — ' + (card.name || card.url), 'color:#4CAF50;');
+      sync('Unfollowed ' + successCount);
+      console.log('%c✅ ' + successCount + ' ' + (card.name || card.url), 'color:#4CAF50');
     } else {
       failCount++;
-      syncProgress('Failed');
-      console.warn('%c❌ Failed — ' + (card.name || card.url), 'color:#f44336;');
+      sync('Failed');
+      console.warn('%c❌ ' + (card.name || card.url), 'color:#f44336');
     }
 
     if (actionsThisSession > 0 && actionsThisSession % COOLDOWN_EVERY_N === 0) {
-      syncProgress('Cooldown ' + COOLDOWN_SECONDS + 's…');
-      await wait(COOLDOWN_SECONDS * 1000);
+      sync('Cooldown ' + COOLDOWN_SECONDS + 's');
+      await sleep(COOLDOWN_SECONDS * 1000);
     }
     if (successCount >= DAILY_CAP) {
-      processActive = false;
-      syncProgress('Daily cap reached');
+      running = false;
+      sync('Daily cap');
       break;
     }
 
-    await wait(INTERVAL_BETWEEN_ACTIONS);
+    await sleep(INTERVAL_BETWEEN_ACTIONS);
   }
 
   window.__FB_UNFOLLOW_RUNNING__ = false;
   var summary = '✅ ' + successCount + ' success | ❌ ' + failCount + ' failed';
-  console.log('%c[Summary] ' + summary, 'color:#FFD700;font-weight:bold;');
+  console.log('%c[Done] ' + summary, 'color:#FFD700;font-weight:bold');
   if (window.__FB_PROGRESS__) window.__FB_PROGRESS__.done(summary);
-  else alert('FB Unfollow Studio finished.\n' + summary);
+  else alert('FB Unfollow finished\n' + summary);
 })();
 })();`;
 }
 
 export function generateUserscript(config: UnfollowConfig): string {
-  const scriptBody = generateScript(config)
+  const body = generateScript(config)
     .replace(/^javascript:/, "")
     .replace(/^\(function\(\)\{/, "")
     .replace(/\}\)\(\);$/, "");
   return `// ==UserScript==
 // @name         FB Unfollow Studio
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.7.0
-// @description  Auto-unfollow EN+Amharic, diagnostic logs
+// @version      1.8.0
+// @description  Auto-unfollow (Actions menu + Following btn, EN/Amharic)
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/*
 // @match        https://facebook.com/*
@@ -480,7 +444,7 @@ export function generateUserscript(config: UnfollowConfig): string {
 // @run-at       document-idle
 // ==/UserScript==
 
-${scriptBody}
+${body}
 `;
 }
 
