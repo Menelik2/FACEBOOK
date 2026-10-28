@@ -99,8 +99,8 @@ ${progressCode}
 
   function isTargetMatch(profileUrl) {
     if (TARGET === 'all') return true;
-    if (TARGET === 'pages') return /\\/pages\\/|\\/pg\\//.test(profileUrl);
-    if (TARGET === 'profiles') return !/\\/pages\\/|\\/pg\\//.test(profileUrl);
+    if (TARGET === 'pages') return /\/pages\/|\/pg\//.test(profileUrl);
+    if (TARGET === 'profiles') return !/\/pages\/|\/pg\//.test(profileUrl);
     return true;
   }
 
