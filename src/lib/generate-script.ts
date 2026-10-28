@@ -98,9 +98,10 @@ ${progressCode}
   }
 
   function isTargetMatch(profileUrl) {
-    if (TARGET === 'all') return true;
-    if (TARGET === 'pages') return /\\/pages\\/|\\/pg\\//.test(profileUrl);
-    if (TARGET === 'profiles') return !/\\/pages\\/|\\/pg\\//.test(profileUrl);
+    var path = String(profileUrl || '').toLowerCase();
+    var isPage = path.indexOf('/pages/') !== -1 || path.indexOf('/pg/') !== -1;
+    if (TARGET === 'pages') return isPage;
+    if (TARGET === 'profiles') return !isPage;
     return true;
   }
 
@@ -182,32 +183,35 @@ ${progressCode}
   }
 
   async function processOneProfile() {
-    var selectors = isMobile
-      ? ['div[role="article"]', 'div[role="listitem"]']
-      : ['div.x78zum5.x1q0g3np.x1a02dak.x1qughib > div', 'div[data-pagelet="ProfileAppSection_0"] div[role="article"]', 'div.x1n2onr6 > div'];
-    var profileContainers = [];
-    for (var s = 0; s < selectors.length; s++) {
-      var found = document.querySelectorAll(selectors[s]);
-      if (found.length > 0) { profileContainers = Array.from(found); break; }
-    }
-    if (profileContainers.length === 0) {
-      var profileLinks = Array.from(document.querySelectorAll('a[href*="facebook.com/"]')).filter(function(a) {
-        var href = a.href || '';
-        return href.indexOf('facebook.com/') !== -1 &&
-          href.indexOf('/photo') === -1 &&
-          href.indexOf('/help') === -1 &&
-          href.indexOf('/settings') === -1;
-      });
-      var seenContainers = new Set();
-      profileContainers = profileLinks.map(function(link) {
-        return link.closest('div[role="article"], div[role="listitem"]') ||
-          link.parentElement && (link.parentElement.parentElement || link.parentElement) || link;
-      }).filter(function(container) {
-        if (seenContainers.has(container)) return false;
-        seenContainers.add(container);
-        return true;
-      });
-    }
+    // Prefer visible profile links and derive each card from its nearest semantic container.
+    // Facebook frequently changes its generated CSS class names.
+    var profileLinks = Array.from(document.querySelectorAll('a[href*="facebook.com/"]')).filter(function(a) {
+      var href = String(a.href || '').toLowerCase();
+      var label = String(a.innerText || a.textContent || '').trim();
+      return a.offsetParent !== null &&
+        href.indexOf('facebook.com/') !== -1 &&
+        href.indexOf('/photo') === -1 &&
+        href.indexOf('/help') === -1 &&
+        href.indexOf('/settings') === -1 &&
+        href.indexOf('/watch') === -1 &&
+        href.indexOf('/reel') === -1 &&
+        label.length > 0;
+    });
+    var seenContainers = new Set();
+    var profileContainers = profileLinks.map(function(link) {
+      var card = link.closest('[role="listitem"], [role="article"]');
+      if (card) return card;
+      var node = link;
+      for (var depth = 0; depth < 6 && node && node.parentElement; depth++) {
+        node = node.parentElement;
+        if (node.querySelector && node.querySelector('button[aria-label*="Following"], [role="button"][aria-label*="Following"], button[aria-label*="Liked"], [role="button"][aria-label*="Liked"]')) return node;
+      }
+      return link.parentElement || link;
+    }).filter(function(container) {
+      if (seenContainers.has(container)) return false;
+      seenContainers.add(container);
+      return true;
+    });
     var foundProfile = false;
     for (var i = 0; i < profileContainers.length; i++) {
       var profile = profileContainers[i];
