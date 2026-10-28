@@ -213,7 +213,7 @@ ${progressCode}
 
   async function processOneProfile() {
     var selectors = isMobile
-      ? ['div[data-pagelet] a[href*="facebook.com/"]', 'div[role="article"]', 'div.x1n2onr6']
+      ? ['div[role="article"]', 'div[role="listitem"]']
       : ['div.x78zum5.x1q0g3np.x1a02dak.x1qughib > div', 'div[data-pagelet="ProfileAppSection_0"] div[role="article"]', 'div.x1n2onr6 > div'];
     var profileContainers = [];
     for (var s = 0; s < selectors.length; s++) {
@@ -221,9 +221,21 @@ ${progressCode}
       if (found.length > 0) { profileContainers = Array.from(found); break; }
     }
     if (profileContainers.length === 0) {
-      profileContainers = Array.from(document.querySelectorAll('a[href*="facebook.com/"]')).filter(function(a) {
+      var profileLinks = Array.from(document.querySelectorAll('a[href*="facebook.com/"]')).filter(function(a) {
         var href = a.href || '';
-        return href.indexOf('facebook.com/') !== -1 && href.indexOf('/photo') === -1;
+        return href.indexOf('facebook.com/') !== -1 &&
+          href.indexOf('/photo') === -1 &&
+          href.indexOf('/help') === -1 &&
+          href.indexOf('/settings') === -1;
+      });
+      var seenContainers = new Set();
+      profileContainers = profileLinks.map(function(link) {
+        return link.closest('div[role="article"], div[role="listitem"]') ||
+          link.parentElement && (link.parentElement.parentElement || link.parentElement) || link;
+      }).filter(function(container) {
+        if (seenContainers.has(container)) return false;
+        seenContainers.add(container);
+        return true;
       });
     }
     var foundProfile = false;
