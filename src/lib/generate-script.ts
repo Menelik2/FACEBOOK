@@ -111,103 +111,73 @@ ${progressCode}
     } catch (e) { el.click(); }
   }
 
-  async function tryUnfollowMobile(profileEl, profileUrl) {
-    if (DRY_RUN) return true;
-    var followingBtn =
-      profileEl.querySelector('[aria-label="Following"], [aria-label="Liked"]') ||
-      Array.from(profileEl.querySelectorAll('div[role="button"]')).find(function(el) {
-        return /^(Following|Liked)$/i.test((el.textContent || '').trim());
-      });
-    if (followingBtn) {
-      simulateTap(followingBtn);
-      await wait(SHORT_FIXED_PAUSE + 400);
-      var unfollowEl = Array.from(document.querySelectorAll('[role="menuitem"], [role="button"]')).find(function(el) {
-        return /unfollow/i.test(el.textContent || '');
-      });
-      if (unfollowEl) {
-        simulateTap(unfollowEl);
-        await wait(600);
-        var confirmBtn = Array.from(document.querySelectorAll('[role="button"], button')).find(function(el) {
-          return /^(Unfollow|Confirm|Update|OK)$/i.test((el.textContent || '').trim());
-        });
-        if (confirmBtn) { simulateTap(confirmBtn); await wait(500); }
-        return true;
-      }
-    }
-    return false;
+  function getVisibleUnfollowControl(container) {
+    var candidates = Array.from(container.querySelectorAll('button, [role="button"], [role="menuitem"]'));
+    return candidates.find(function(el) {
+      if (!el || !el.isConnected || el.getAttribute('aria-disabled') === 'true') return false;
+      var label = ((el.getAttribute('aria-label') || '') + ' ' + (el.innerText || el.textContent || '')).trim();
+      return /^(Following|Followed|Liked|Subscribed|Following,.*|Liked,.*)$/i.test(label) ||
+        /^(Unfollow|Unfollow Page|Unlike)$/i.test(label);
+    });
   }
 
-  async function tryUnfollowDesktop(hoverContainer, profileUrl) {
+  async function tryUnfollowMobile(profileEl, profileUrl) {
+    return tryUnfollowCard(profileEl, profileUrl);
+  }
+
+  async function tryUnfollowDesktop(profileEl, profileUrl) {
+    return tryUnfollowCard(profileEl, profileUrl);
+  }
+
+  async function tryUnfollowCard(profileEl, profileUrl) {
     if (DRY_RUN) return true;
-    var threeDotBtn =
-      !(hoverContainer.querySelector('div[role="button"][aria-label="Following"]') ||
-        hoverContainer.querySelector('div[role="button"][aria-label="Liked"]')) &&
-      Array.from(hoverContainer.querySelectorAll('div[role="none"], div[role="button"]')).find(function(el) {
-        return el.querySelector('svg circle[cx="12"][cy="12"]') || (el.innerHTML || '').indexOf('⋯') !== -1;
-      });
-    if (threeDotBtn) {
-      threeDotBtn.click();
-      await wait(800);
-      var unfollowMenu = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="none"]')).find(function(el) {
-        return el.textContent && el.textContent.indexOf('Following') !== -1;
-      });
-      if (unfollowMenu) {
-        unfollowMenu.click();
-        await wait(700);
-        var dialog = await waitForElement('div[role="dialog"]', 4000);
-        if (dialog) {
-          var unfollowRadio = Array.from(dialog.querySelectorAll('div[role="radio"]')).find(function(el) {
-            return el.textContent && el.textContent.indexOf('Unfollow') !== -1;
-          });
-          if (unfollowRadio) { unfollowRadio.click(); await wait(300); }
-          if (ALSO_UNLIKE_PAGES) {
-            var unlikeButton = Array.from(document.querySelectorAll('div[role="button"], input[role="switch"]')).find(function(el) {
-              return (el.textContent && el.textContent.indexOf('Unlike this Page') !== -1) || el.getAttribute('aria-label') === 'Unlike';
-            });
-            if (unlikeButton) { unlikeButton.click(); await wait(400); }
-          }
-          var updateBtn = Array.from(dialog.querySelectorAll('div[role="button"], button')).find(function(el) {
-            return el.textContent && el.textContent.trim() === 'Update';
-          });
-          if (updateBtn) { updateBtn.click(); await wait(800); return true; }
-        }
-      }
-    }
-    var directBtn = hoverContainer.querySelector('div[role="button"][aria-label="Unfollow"]');
-    if (directBtn) { directBtn.click(); return true; }
-    var followingBtn =
-      hoverContainer.querySelector('div[role="button"][aria-label="Following"]') ||
-      hoverContainer.querySelector('div[role="button"][aria-label="Liked"]') ||
-      hoverContainer.querySelector('div[role="button"][aria-label="Favorites"]');
-    if (followingBtn) {
-      followingBtn.click();
+    var control = getVisibleUnfollowControl(profileEl);
+    if (!control) return false;
+
+    var beforeLabel = ((control.getAttribute('aria-label') || '') + ' ' + (control.innerText || control.textContent || '')).trim();
+    if (/^(Unfollow|Unfollow Page|Unlike)$/i.test(beforeLabel)) {
+      control.click();
       await wait(SHORT_FIXED_PAUSE);
-      var dialog2 = await waitForElement('div[role="dialog"]', 6000);
-      if (!dialog2) return false;
-      var unfollowRadio2 = Array.from(dialog2.querySelectorAll('div[role="radio"]')).find(function(el) {
-        return el.textContent && el.textContent.indexOf('Unfollow') !== -1;
-      });
-      if (unfollowRadio2) { unfollowRadio2.click(); await wait(400); }
-      if (ALSO_UNLIKE_PAGES) {
-        var unlikeButton2 = Array.from(document.querySelectorAll('div[role="button"], input[role="switch"]')).find(function(el) {
-          return (el.textContent && el.textContent.indexOf('Unlike this Page') !== -1) || el.getAttribute('aria-label') === 'Unlike';
+    } else {
+      control.click();
+      await wait(SHORT_FIXED_PAUSE);
+
+      var menuItems = Array.from(document.querySelectorAll('[role="menuitem"], [role="button"], button, [role="dialog"] *'))
+        .filter(function(el) {
+          if (!el || !el.isConnected) return false;
+          var label = ((el.getAttribute('aria-label') || '') + ' ' + (el.innerText || el.textContent || '')).trim();
+          return /^(Unfollow|Unfollow Page|Unlike)$/i.test(label);
         });
-        if (unlikeButton2) { unlikeButton2.click(); await wait(400); }
+      var action = menuItems.find(function(el) {
+        return el.getAttribute('aria-disabled') !== 'true' && el.offsetParent !== null;
+      });
+      if (!action) {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return false;
       }
-      var updateBtn2 = Array.from(dialog2.querySelectorAll('div[role="button"], button')).find(function(el) {
-        return el.textContent && el.textContent.trim() === 'Update';
-      });
-      if (updateBtn2) { updateBtn2.click(); await wait(800); return true; }
-    }
-    var optionsBtn = hoverContainer.querySelector('div[role="button"][aria-label*="Options"]');
-    if (optionsBtn) {
-      optionsBtn.click();
+      action.click();
       await wait(SHORT_FIXED_PAUSE);
-      var unfollowMenu2 = Array.from(document.querySelectorAll('div[role="menuitem"]')).find(function(el) {
-        return el.textContent && el.textContent.indexOf('Unfollow') !== -1;
-      });
-      if (unfollowMenu2) { unfollowMenu2.click(); return true; }
+
+      var confirm = Array.from(document.querySelectorAll('[role="dialog"] button, [role="dialog"] [role="button"], button, [role="button"]'))
+        .find(function(el) {
+          var label = ((el.getAttribute('aria-label') || '') + ' ' + (el.innerText || el.textContent || '')).trim();
+          return /^(Unfollow|Confirm|Remove|Update)$/i.test(label) &&
+            el.getAttribute('aria-disabled') !== 'true' && el.offsetParent !== null;
+        });
+      if (confirm) {
+        confirm.click();
+        await wait(SHORT_FIXED_PAUSE);
+      }
     }
+
+    await wait(500);
+    var after = getVisibleUnfollowControl(profileEl);
+    var afterLabel = after ? ((after.getAttribute('aria-label') || '') + ' ' + (after.innerText || after.textContent || '')).trim() : '';
+    var stateChanged = !after || /^(Follow|Follow Page|Like|Subscribe)$/i.test(afterLabel) ||
+      (/^(Unfollow|Unfollow Page|Unlike)$/i.test(beforeLabel) && !after);
+    if (stateChanged) return true;
+
+    console.warn('[FB Unfollow] Could not verify state change for:', profileUrl);
     return false;
   }
 
