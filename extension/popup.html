@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unfollow Assistant</title><link rel="stylesheet" href="popup.css"></head>
+<body><main class="app"><header><div class="mark">F</div><div><h1>Unfollow Assistant</h1><p class="sub">Facebook · user-controlled</p></div></header>
+<section class="notice"><strong>Before you start</strong><p>Open Facebook's <b>Following</b> list in this tab. This extension only clicks controls visible on that page. Review Facebook's prompts and follow its rules.</p></section>
+<label for="limit">Maximum accounts this run</label><select id="limit"><option value="5">5 accounts</option><option value="10" selected>10 accounts</option><option value="20">20 accounts</option></select>
+<label class="check"><input type="checkbox" id="confirm"> I understand this will change which accounts I follow.</label>
+<div class="actions"><button id="scan" class="secondary">Find accounts</button><button id="start" class="primary" disabled>Start unfollowing</button></div><div class="actions"><button id="pause" class="secondary" disabled>Pause</button><button id="stop" class="danger" disabled>Stop</button></div>
+<section class="status"><div class="status-head"><span id="state">Ready</span><span id="count">0 / 0</span></div><div class="track"><div id="bar"></div></div><p id="detail">Navigate to the Following list, then choose Find accounts.</p></section><p class="foot">No Facebook password is collected. Actions happen only after you press Start.</p></main><script src="popup.js"></script></body></html>
