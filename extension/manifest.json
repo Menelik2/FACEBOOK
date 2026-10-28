@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Facebook Unfollow Assistant",
+  "version": "1.0.0",
+  "description": "A user-controlled helper for reviewing and unfollowing accounts from Facebook's Following list.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
+  "action": { "default_title": "Unfollow Assistant", "default_popup": "popup.html" },
+  "content_scripts": [{
+    "matches": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }]
+}
