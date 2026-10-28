@@ -5,9 +5,7 @@ export function generateScript(config: UnfollowConfig): string {
   const {
     INTERVAL_BETWEEN_ACTIONS,
     SHORT_FIXED_PAUSE,
-    HOVER_WAIT_TIMEOUT,
     MAX_SCROLL_ATTEMPTS,
-    ALSO_UNLIKE_PAGES,
     DRY_RUN,
     RANDOM_JITTER,
     DAILY_CAP,
@@ -17,16 +15,14 @@ export function generateScript(config: UnfollowConfig): string {
     THEME,
   } = config;
 
-  const themeColors: Record<string, { primary: string; success: string; warn: string; info: string }> = {
-    neon: { primary: "#00FF7F", success: "#00FF7F", warn: "#FFCC00", info: "#00B0FF" },
-    minimal: { primary: "#1877F2", success: "#4CAF50", warn: "#FF9800", info: "#2196F3" },
-    retro: { primary: "#FF6B6B", success: "#4ECDC4", warn: "#FFE66D", info: "#95E1D3" },
+  const themeColors: Record<string, { primary: string }> = {
+    neon: { primary: "#00FF7F" },
+    minimal: { primary: "#1877F2" },
+    retro: { primary: "#FF6B6B" },
   };
   const colors = themeColors[THEME] || themeColors.neon;
   const progressCode = getProgressUICode("FB Auto Unfollow", colors.primary);
 
-  // NOTE: Inside the template we must emit valid JS regexes.
-  // In a TS template literal, \\ becomes \ in the output string.
   return `javascript:(function(){
 if (window.__FB_UNFOLLOW_RUNNING__) { alert('FB Unfollow Studio is already running'); return; }
 window.__FB_UNFOLLOW_RUNNING__ = true;
@@ -35,7 +31,7 @@ ${progressCode}
 
 (async function () {
   'use strict';
-  console.log('%c[Facebook Auto Unfollow v1.6] Started', 'color:#1877F2;font-weight:bold;');
+  console.log('%c[FB Unfollow v1.7] Started', 'color:#1877F2;font-weight:bold;');
 
   const INTERVAL_BETWEEN_ACTIONS = ${INTERVAL_BETWEEN_ACTIONS};
   const SHORT_FIXED_PAUSE = ${SHORT_FIXED_PAUSE};
@@ -57,10 +53,8 @@ ${progressCode}
   function syncProgress(status) {
     if (window.__FB_PROGRESS__) {
       window.__FB_PROGRESS__.update({
-        success: successCount,
-        fail: failCount,
-        total: successCount + failCount,
-        status: status
+        success: successCount, fail: failCount,
+        total: successCount + failCount, status: status
       });
     }
   }
@@ -80,25 +74,26 @@ ${progressCode}
       var jitter = ms * 0.25 * (Math.random() * 2 - 1);
       actual = Math.max(120, Math.round(ms + jitter));
     }
-    return new Promise(function (resolve) { setTimeout(resolve, actual); });
+    return new Promise(function (r) { setTimeout(r, actual); });
   };
 
   function norm(s) {
     return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
-  function textOf(el) {
+  function rawText(el) {
     if (!el) return '';
     var aria = el.getAttribute ? (el.getAttribute('aria-label') || el.getAttribute('title') || '') : '';
-    var txt = el.innerText || el.textContent || '';
-    return norm(aria + ' ' + txt);
+    return String(aria + ' ' + (el.innerText || el.textContent || '')).replace(/\s+/g, ' ').trim();
   }
+
+  function textOf(el) { return norm(rawText(el)); }
 
   function isVisible(el) {
     if (!el || !el.isConnected) return false;
     try {
       var r = el.getBoundingClientRect();
-      return r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < (window.innerHeight + 80);
+      return r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < (window.innerHeight + 100);
     } catch (e) { return false; }
   }
 
@@ -110,15 +105,19 @@ ${progressCode}
     return true;
   }
 
-  // ---- Button matchers (current Facebook wording) ----
+  // EN + Amharic (and common variants). Amharic Facebook uses localized labels.
   function isFollowingBtn(el) {
     if (!el || !isVisible(el)) return false;
     if (el.getAttribute && el.getAttribute('aria-disabled') === 'true') return false;
     var t = textOf(el);
-    // "Following", "Liked", "Subscribed", "Following, …"
+    var raw = rawText(el);
+    // English
     if (/^(following|followed|liked|subscribed)\b/.test(t)) return true;
     if (/\bfollowing\b/.test(t) && !/unfollow|unlike/.test(t)) return true;
     if (/\bliked\b/.test(t) && !/unlike/.test(t)) return true;
+    // Amharic — በመከተል ላይ (following), ተወዳጅ / ወድጄዋለሁ style likes
+    if (/በመከተል/.test(raw)) return true;
+    if (/ተወዳጅ|ወድጄ/.test(raw) && !/አትወድ|አታስወግድ/.test(raw)) return true;
     return false;
   }
 
@@ -126,25 +125,46 @@ ${progressCode}
     if (!el || !isVisible(el)) return false;
     var aria = (el.getAttribute && el.getAttribute('aria-label')) || '';
     var t = norm(aria + ' ' + (el.innerText || ''));
-    return /\b(actions|more options|more)\b/.test(t) || aria === '…' || aria === '...';
+    var raw = rawText(el);
+    if (/\b(actions|more options|more)\b/.test(t)) return true;
+    if (aria === '…' || aria === '...' || aria === '•••') return true;
+    // Amharic "more" / options approximations
+    if (/ተጨማሪ|አማራጮች|እርምጃዎች/.test(raw)) return true;
+    // Icon-only three-dot often has empty/short label but contains svg circles
+    if ((!aria || aria.length < 3) && el.querySelector && el.querySelector('svg circle, svg[viewBox]')) {
+      var parentHasProfile = el.parentElement && el.parentElement.querySelector('a[href*="facebook.com"], a[href^="/"]');
+      if (parentHasProfile) return true;
+    }
+    return false;
   }
 
   function isUnfollowItem(el) {
     if (!el || !isVisible(el)) return false;
     var t = textOf(el);
-    return /^(unfollow|unfollow page|unfollow person|unlike|unsubscribe)\b/.test(t) ||
-      /^unfollow\b/.test(t) || /^unlike\b/.test(t);
+    var raw = rawText(el);
+    if (/^(unfollow|unfollow page|unfollow person|unlike|unsubscribe)\b/.test(t)) return true;
+    if (/^unfollow\b|^unlike\b/.test(t)) return true;
+    // Amharic unfollow-ish
+    if (/አትከተል|መከተልን አቁም|መከተል አቁም|አታስከተል|ከመከተል ውጣ/.test(raw)) return true;
+    if (/unlike|አታስወድድ|አትውደድ/.test(raw)) return true;
+    return false;
   }
 
   function isConfirmBtn(el) {
     if (!el || !isVisible(el)) return false;
     var t = textOf(el);
-    return /^(unfollow|confirm|remove|update|yes|ok)\b/.test(t);
+    var raw = rawText(el);
+    if (/^(unfollow|confirm|remove|update|yes|ok)\b/.test(t)) return true;
+    if (/አረጋግጥ|እሺ|አዎ|አዘምን|ሰርዝ/.test(raw)) return true;
+    return false;
   }
 
   function clickEl(el) {
     if (!el) return;
     try {
+      el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
       el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
     } catch (e) {
       try { el.click(); } catch (e2) {}
@@ -155,52 +175,88 @@ ${progressCode}
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
   }
 
-  // ---- Find cards on the Following list ----
+  // Diagnostic: log what the page actually shows
+  function diagnose() {
+    var btns = Array.from(document.querySelectorAll('[role="button"], button, [role="menuitem"]'))
+      .filter(isVisible)
+      .slice(0, 40)
+      .map(function (el) {
+        return {
+          text: rawText(el).slice(0, 60),
+          aria: (el.getAttribute && el.getAttribute('aria-label')) || '',
+          tag: el.tagName
+        };
+      })
+      .filter(function (b) { return b.text || b.aria; });
+    console.log('%c[FB DIAG] URL: ' + location.href, 'color:#00B0FF');
+    console.log('%c[FB DIAG] Visible controls (first 40):', 'color:#00B0FF', btns);
+    var followCount = btns.filter(function (b) {
+      var t = norm(b.text + ' ' + b.aria);
+      return /follow|like|በመከተል|ተወዳጅ/.test(t);
+    }).length;
+    console.log('%c[FB DIAG] Possible follow-related: ' + followCount, 'color:#00B0FF');
+    return btns;
+  }
+
   function getCards() {
     var cards = [];
     var seen = new Set();
 
-    // Strategy A: buttons that say Following / Liked
-    var followBtns = Array.from(document.querySelectorAll(
-      'div[role="button"], button, span[role="button"], [role="button"]'
-    )).filter(isFollowingBtn);
-
-    followBtns.forEach(function (btn) {
+    function addCard(btn, viaActions) {
       var root = btn;
-      for (var i = 0; i < 10 && root && root !== document.body; i++) {
+      for (var i = 0; i < 12 && root && root !== document.body; i++) {
         root = root.parentElement;
         if (!root) break;
         var link = root.querySelector('a[href*="facebook.com/"], a[href^="/"]');
         if (link && link.href) {
-          var key = link.href.split('?')[0];
-          if (!seen.has(key) && isTargetMatch(key)) {
-            seen.add(key);
-            cards.push({ root: root, btn: btn, url: key, name: (link.innerText || link.getAttribute('aria-label') || key).trim() });
-          }
-          break;
+          var key = link.href.split('?')[0].split('#')[0];
+          if (seen.has(key)) return;
+          if (!isTargetMatch(key)) return;
+          if (/\/(photo|photos|reel|reels|watch|groups|marketplace|events|stories)\b/i.test(key)) return;
+          seen.add(key);
+          cards.push({
+            root: root,
+            btn: btn,
+            url: key,
+            name: (link.innerText || link.getAttribute('aria-label') || key).trim().slice(0, 80),
+            viaActions: !!viaActions
+          });
+          return;
         }
       }
-    });
+    }
 
-    // Strategy B: 3-dot / Actions menus (newer Facebook UI)
+    Array.from(document.querySelectorAll('[role="button"], button, span[role="button"]'))
+      .filter(isFollowingBtn)
+      .forEach(function (btn) { addCard(btn, false); });
+
     if (cards.length === 0) {
-      var actionBtns = Array.from(document.querySelectorAll(
-        'div[aria-label][role="button"], div[role="button"][aria-label], button[aria-label]'
-      )).filter(isActionsBtn);
+      Array.from(document.querySelectorAll('div[aria-label][role="button"], div[role="button"][aria-label], button[aria-label]'))
+        .filter(isActionsBtn)
+        .forEach(function (btn) { addCard(btn, true); });
+    }
 
-      actionBtns.forEach(function (btn) {
-        var root = btn;
-        for (var i = 0; i < 10 && root && root !== document.body; i++) {
-          root = root.parentElement;
-          if (!root) break;
-          var link = root.querySelector('a[href*="facebook.com/"], a[href^="/"]');
-          if (link && link.href) {
-            var key = link.href.split('?')[0];
-            if (!seen.has(key) && isTargetMatch(key) &&
-                !/\/(photo|reel|watch|groups|marketplace|events)\b/.test(key)) {
-              seen.add(key);
-              cards.push({ root: root, btn: btn, url: key, name: (link.innerText || '').trim(), viaActions: true });
-            }
+    // Last resort: any row with a profile link + any button nearby
+    if (cards.length === 0) {
+      Array.from(document.querySelectorAll('a[href*="facebook.com/"], a[href^="/"]')).forEach(function (link) {
+        if (!isVisible(link)) return;
+        var key = (link.href || '').split('?')[0];
+        if (!key || seen.has(key) || !isTargetMatch(key)) return;
+        if (/\/(photo|reel|watch|groups|marketplace)\b/i.test(key)) return;
+        var node = link;
+        for (var d = 0; d < 8 && node; d++) {
+          node = node.parentElement;
+          if (!node) break;
+          var btns = Array.from(node.querySelectorAll('[role="button"], button')).filter(isVisible);
+          if (btns.length > 0) {
+            seen.add(key);
+            cards.push({
+              root: node,
+              btn: btns.find(isFollowingBtn) || btns.find(isActionsBtn) || btns[0],
+              url: key,
+              name: (link.innerText || '').trim().slice(0, 80),
+              viaActions: !isFollowingBtn(btns[0])
+            });
             break;
           }
         }
@@ -221,82 +277,80 @@ ${progressCode}
     } catch (e) {
       try { card.root.scrollIntoView({ block: 'center' }); } catch (e2) {}
     }
-    await wait(400);
+    await wait(450);
 
-    // Path 1: direct Following / Liked button
-    if (!card.viaActions && card.btn && isFollowingBtn(card.btn)) {
-      console.log('[FB] Click Following/Liked:', card.name);
+    // Path 1: Following / Liked
+    if (card.btn && isFollowingBtn(card.btn)) {
+      console.log('[FB] Click Following-type:', rawText(card.btn), '|', card.name);
       clickEl(card.btn);
-      await wait(SHORT_FIXED_PAUSE + 400);
+      await wait(SHORT_FIXED_PAUSE + 500);
 
-      // Look for Unfollow in any open menu / dialog
       var item = Array.from(document.querySelectorAll(
-        '[role="menuitem"], [role="button"], div[role="button"], span[role="button"], button'
+        '[role="menuitem"], [role="button"], div[role="button"], button, span[role="button"]'
       )).find(isUnfollowItem);
 
       if (!item) {
-        await wait(500);
+        await wait(700);
         item = Array.from(document.querySelectorAll(
           '[role="menuitem"], [role="button"], div[role="button"], button'
         )).find(isUnfollowItem);
       }
 
       if (item) {
-        console.log('[FB] Click Unfollow item');
+        console.log('[FB] Click Unfollow item:', rawText(item));
         clickEl(item);
-        await wait(SHORT_FIXED_PAUSE + 300);
-
+        await wait(SHORT_FIXED_PAUSE + 400);
         var conf = Array.from(document.querySelectorAll(
           '[role="dialog"] button, [role="dialog"] [role="button"], [role="alertdialog"] button, button'
         )).find(isConfirmBtn);
         if (conf) {
+          console.log('[FB] Confirm:', rawText(conf));
           clickEl(conf);
           await wait(SHORT_FIXED_PAUSE);
         }
-        await wait(500);
+        await wait(600);
         return true;
       }
-
-      // Menu did not open — try Escape and fall through to Actions path
+      console.warn('[FB] No Unfollow item after Following click. Menu texts:', 
+        Array.from(document.querySelectorAll('[role="menuitem"], [role="menu"] [role="button"]'))
+          .filter(isVisible).map(rawText).slice(0, 10));
       closeMenus();
-      await wait(200);
+      await wait(250);
     }
 
-    // Path 2: 3-dot Actions / More menu (very common in 2025–2026 UI)
-    var actionsBtn = card.viaActions ? card.btn : null;
+    // Path 2: Actions / More / ⋯
+    var actionsBtn = (card.viaActions && card.btn) ? card.btn : null;
     if (!actionsBtn) {
       actionsBtn = Array.from(card.root.querySelectorAll(
-        'div[aria-label][role="button"], div[role="button"][aria-label], button[aria-label]'
+        '[role="button"], button'
       )).find(isActionsBtn);
     }
-    // Also search slightly higher
     if (!actionsBtn && card.root.parentElement) {
       actionsBtn = Array.from(card.root.parentElement.querySelectorAll(
-        'div[aria-label][role="button"], div[role="button"][aria-label]'
+        '[role="button"], button'
       )).find(isActionsBtn);
     }
 
     if (actionsBtn) {
-      console.log('[FB] Click Actions/More:', card.name);
+      console.log('[FB] Click Actions/More:', rawText(actionsBtn), '|', card.name);
       clickEl(actionsBtn);
-      await wait(SHORT_FIXED_PAUSE + 500);
+      await wait(SHORT_FIXED_PAUSE + 600);
 
       var unf = Array.from(document.querySelectorAll(
-        '[role="menuitem"], div[role="menuitem"], [role="button"], div[role="button"]'
+        '[role="menuitem"], [role="button"], div[role="button"], button'
       )).find(isUnfollowItem);
 
       if (!unf) {
-        await wait(600);
+        await wait(700);
         unf = Array.from(document.querySelectorAll(
-          '[role="menuitem"], [role="button"], div[role="button"]'
+          '[role="menuitem"], [role="button"], div[role="button"], button'
         )).find(isUnfollowItem);
       }
 
       if (unf) {
-        console.log('[FB] Click Unfollow from menu');
+        console.log('[FB] Click Unfollow from menu:', rawText(unf));
         clickEl(unf);
-        await wait(SHORT_FIXED_PAUSE + 300);
-
+        await wait(SHORT_FIXED_PAUSE + 400);
         var conf2 = Array.from(document.querySelectorAll(
           '[role="dialog"] button, [role="dialog"] [role="button"], button'
         )).find(isConfirmBtn);
@@ -304,29 +358,49 @@ ${progressCode}
           clickEl(conf2);
           await wait(SHORT_FIXED_PAUSE);
         }
-        await wait(500);
+        await wait(600);
         return true;
       }
 
-      console.warn('[FB] Unfollow option not in menu');
+      console.warn('[FB] Unfollow not in menu. Items:',
+        Array.from(document.querySelectorAll('[role="menuitem"], [role="menu"] *'))
+          .filter(isVisible).map(rawText).filter(Boolean).slice(0, 15));
       closeMenus();
       return false;
     }
 
-    console.warn('[FB] No Following button and no Actions menu for', card.name || card.url);
+    // Path 3: click whatever button is on the card and hope menu appears
+    if (card.btn) {
+      console.log('[FB] Fallback click card button:', rawText(card.btn));
+      clickEl(card.btn);
+      await wait(SHORT_FIXED_PAUSE + 600);
+      var anyUnf = Array.from(document.querySelectorAll(
+        '[role="menuitem"], [role="button"], button'
+      )).find(isUnfollowItem);
+      if (anyUnf) {
+        clickEl(anyUnf);
+        await wait(SHORT_FIXED_PAUSE + 400);
+        return true;
+      }
+      closeMenus();
+    }
+
+    console.warn('[FB] Could not unfollow', card.name || card.url);
     return false;
   }
 
-  // ---- Main loop ----
+  // ---- Start ----
+  diagnose();
+  syncProgress('Scanning…');
+
   var path = (location.pathname || '').toLowerCase();
-  if (path.indexOf('following') === -1 && path.indexOf('friends') === -1) {
-    console.warn('[FB] Open your Following list: Profile → Friends → Following');
-    syncProgress('Open Following list first');
+  if (path.indexOf('following') === -1 && path.indexOf('friends') === -1 && path.indexOf('likes') === -1) {
+    console.warn('[FB] Tip: open Profile → Friends → Following (or /me/following)');
   }
 
   while (processActive) {
     var cards = getCards();
-    console.log('[FB] Visible cards:', cards.length);
+    console.log('[FB] Cards found:', cards.length);
 
     if (cards.length === 0) {
       emptyScrolls++;
@@ -335,23 +409,23 @@ ${progressCode}
         processActive = false;
         break;
       }
-      window.scrollBy(0, Math.max(600, window.innerHeight * 0.85));
-      await wait(1800);
+      window.scrollBy(0, Math.max(700, window.innerHeight * 0.9));
+      await wait(2000);
       continue;
     }
 
     emptyScrolls = 0;
     var card = cards[0];
     processed.add(card.url);
-    syncProgress('Processing: ' + (card.name || '').slice(0, 28));
+    syncProgress('Processing: ' + (card.name || '').slice(0, 24));
 
     var ok = false;
     try {
       ok = await unfollowOne(card);
     } catch (err) {
-      console.error('[FB] Error:', err);
-      ok = false;
+      console.error('[FB] Error', err);
       closeMenus();
+      ok = false;
     }
 
     if (ok) {
@@ -395,8 +469,8 @@ export function generateUserscript(config: UnfollowConfig): string {
   return `// ==UserScript==
 // @name         FB Unfollow Studio
 // @namespace    https://github.com/Menelik2/FACEBOOK
-// @version      1.6.0
-// @description  Auto-unfollow with live progress bar (2026 Facebook UI)
+// @version      1.7.0
+// @description  Auto-unfollow EN+Amharic, diagnostic logs
 // @author       FB Unfollow Studio
 // @match        https://www.facebook.com/*
 // @match        https://facebook.com/*
