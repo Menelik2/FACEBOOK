@@ -27,3 +27,6 @@ Desktop Chrome supports this Manifest V3 extension through **Load unpacked**. St
 
 ## Verification and known limits
 The extension counts a verified unfollow only when the same visible profile card displays a **Follow**, **Like**, or **Subscribe** control after the action. Missing cards, unavailable menus, and uncertain state changes are reported as needing review rather than success. Facebook may render a different layout or language, so detection can return zero accounts. Test on an account you control and review each change. Do not interpret a finished run as proof that every followed account was removed.
+
+## Facebook profile Following tab (desktop-site layout)
+The extension also recognizes profile **Friends → Following** views, including `/friends/following` and `?sk=following` routes, and searches account cards for their actions menus. The exact live Facebook markup can change, so test one account first and review uncertain results. This does not enable extensions in standard Android Chrome, even with **Desktop site** checked.
