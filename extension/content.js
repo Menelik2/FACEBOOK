@@ -81,7 +81,7 @@
   }
 
   function isFollowingPage() {
-    return /\\/(following|friends\\/following)(?:\\/|$)/i.test(location.pathname) ||
+    return /\/(following|friends\/following)(?:\/|$)/i.test(location.pathname) ||
       /following/i.test(document.querySelector('h1')?.innerText || '');
   }
 
@@ -89,8 +89,8 @@
     try {
       const url = new URL(link.href, location.href);
       if (!['www.facebook.com', 'web.facebook.com'].includes(url.hostname)) return null;
-      if (!/^\\/(?:profile\\.php|[a-z0-9._-]+)\\/?$/i.test(url.pathname)) return null;
-      if (/^\\/(?:friends|following|pages|groups|watch|marketplace|reels|events|gaming|settings|help|notifications|messages|me|home)\\/?$/i.test(url.pathname)) return null;
+      if (!/^\/(?:profile\.php|[a-z0-9._-]+)\/?$/i.test(url.pathname)) return null;
+      if (/^\/(?:friends|following|pages|groups|watch|marketplace|reels|events|gaming|settings|help|notifications|messages|me|home)\/?$/i.test(url.pathname)) return null;
       return url.origin + url.pathname + (url.pathname === '/profile.php' ? '?id=' + (url.searchParams.get('id') || '') : '');
     } catch { return null; }
   }
