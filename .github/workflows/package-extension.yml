@@ -1,0 +1,34 @@
+name: Package Chrome Extension
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'extension/**'
+      - '.github/workflows/package-extension.yml'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate extension files
+        run: |
+          test -f extension/manifest.json
+          test -f extension/popup.html
+          test -f extension/popup.css
+          test -f extension/popup.js
+          test -f extension/content.js
+          python3 -m json.tool extension/manifest.json >/dev/null
+          node --check extension/popup.js
+          node --check extension/content.js
+      - name: Create installable ZIP
+        run: |
+          cd extension
+          zip -r ../facebook-unfollow-extension.zip manifest.json popup.html popup.css popup.js content.js README.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: facebook-unfollow-extension
+          path: facebook-unfollow-extension.zip
+          if-no-files-found: error
