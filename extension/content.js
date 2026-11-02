@@ -80,130 +80,83 @@
     }
   }
 
+  function isFollowingPage() {
+    return /\\/(following|friends\\/following)(?:\\/|$)/i.test(location.pathname) ||
+      /following/i.test(document.querySelector('h1')?.innerText || '');
+  }
+
+  function profileUrl(link) {
+    try {
+      const url = new URL(link.href, location.href);
+      if (!['www.facebook.com', 'web.facebook.com'].includes(url.hostname)) return null;
+      if (!/^\\/(?:profile\\.php|[a-z0-9._-]+)\\/?$/i.test(url.pathname)) return null;
+      if (/^\\/(?:friends|following|pages|groups|watch|marketplace|reels|events|gaming|settings|help|notifications|messages|me|home)\\/?$/i.test(url.pathname)) return null;
+      return url.origin + url.pathname + (url.pathname === '/profile.php' ? '?id=' + (url.searchParams.get('id') || '') : '');
+    } catch { return null; }
+  }
+
   function getCards() {
+    if (!isFollowingPage()) return [];
     const cards = new Map();
-
-    const tryAttach = (btn, kind) => {
-      let node = btn;
-      for (let i = 0; i < 12 && node && node !== document.body; i++, node = node.parentElement) {
-        const link = node.querySelector?.('a[href*="facebook.com/"], a[href^="/"]');
-        if (!link?.href) continue;
-        const key = link.href.split("?")[0];
-        if (cards.has(key)) return;
-        if (/\/(photo|reel|watch|groups|marketplace)\b/i.test(key)) return;
-        cards.set(key, {
-          node,
-          btn,
-          kind,
-          name: (link.innerText || link.getAttribute("aria-label") || key).trim(),
-          url: key,
-        });
-        return;
+    for (const link of document.querySelectorAll('a[href]')) {
+      if (!visible(link)) continue;
+      const url = profileUrl(link);
+      if (!url || cards.has(url)) continue;
+      let node = link;
+      for (let depth = 0; depth < 7 && node && node !== document.body; depth++, node = node.parentElement) {
+        const buttons = [...node.querySelectorAll('button,[role="button"]')].filter(visible);
+        const following = buttons.find(isFollowing);
+        const actions = buttons.find(isActions);
+        if (!following && !actions) continue;
+        // Never attach a generic page-level menu to a profile.
+        if (node.querySelectorAll('a[href]').length > 12) break;
+        cards.set(url, { node, btn: following || actions, kind: following ? 'following' : 'actions',
+          name: (link.innerText || link.getAttribute('aria-label') || url).trim(), url });
+        break;
       }
-    };
-
-    [...document.querySelectorAll('div[aria-label][role="button"], div[role="button"][aria-label], button[aria-label]')]
-      .filter(isActions)
-      .forEach((b) => tryAttach(b, "actions"));
-
-    [...document.querySelectorAll('[role="button"], button')]
-      .filter(isFollowing)
-      .forEach((b) => tryAttach(b, "following"));
-
-    if (cards.size === 0) {
-      [...document.querySelectorAll('a[href*="facebook.com/"], a[href^="/"]')].forEach((link) => {
-        if (!visible(link)) return;
-        const key = link.href.split("?")[0];
-        if (cards.has(key)) return;
-        let node = link;
-        for (let i = 0; i < 9 && node; i++, node = node.parentElement) {
-          const btns = [...(node.querySelectorAll?.('[role="button"], button') || [])].filter(visible);
-          if (!btns.length) continue;
-          const prefer = btns.find(isFollowing) || btns.find(isActions) || btns[btns.length - 1];
-          cards.set(key, {
-            node,
-            btn: prefer,
-            kind: isFollowing(prefer) ? "following" : isActions(prefer) ? "actions" : "any",
-            name: (link.innerText || "").trim(),
-            url: key,
-          });
-          break;
-        }
-      });
     }
-
     return [...cards.values()];
   }
 
+  function visibleButtons(root) {
+    return [...root.querySelectorAll('button,[role="button"],[role="menuitem"]')].filter(visible);
+  }
+
+  function confirmedUnfollow(card) {
+    // Disappearance alone is not evidence of success: Facebook may rerender or virtualize a row.
+    const follow = visibleButtons(card.node).find((el) => {
+      const t = low(el);
+      return /^(follow|follow back|like|subscribe)$/.test(t);
+    });
+    return Boolean(follow);
+  }
+
   async function clickUnfollow(card) {
-    try {
-      card.node.scrollIntoView({ block: "center", behavior: "instant" });
-    } catch {
-      try {
-        card.node.scrollIntoView({ block: "center" });
-      } catch {}
+    if (!card.node.isConnected) return 'uncertain';
+    try { card.node.scrollIntoView({block:'center'}); } catch {}
+    await sleep(350);
+    const control = visibleButtons(card.node).find(isFollowing) ||
+      (card.kind === 'actions' && isActions(card.btn) ? card.btn : visibleButtons(card.node).find(isActions));
+    if (!control) return 'needs-review';
+    control.click();
+    await sleep(650);
+    const action = [...document.querySelectorAll('[role="menu"],[role="dialog"],[role="listbox"]')]
+      .filter(visible).flatMap(visibleButtons).find(isUnfollow);
+    if (!action) return 'needs-review';
+    action.click();
+    await sleep(600);
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(visible);
+    if (dialogs.length) {
+      const confirm = dialogs.flatMap(visibleButtons).find(isConfirm);
+      if (!confirm) return 'needs-review';
+      confirm.click();
+      await sleep(650);
     }
-    await sleep(400);
-
-    let actionsBtn =
-      card.kind === "actions"
-        ? card.btn
-        : [...card.node.querySelectorAll('[role="button"], button')].find(isActions);
-    if (!actionsBtn && card.node.parentElement) {
-      actionsBtn = [...card.node.parentElement.querySelectorAll('[role="button"], button')].find(isActions);
+    for (let i=0;i<4;i++) {
+      if (confirmedUnfollow(card)) return 'processed';
+      await sleep(400);
     }
-
-    if (actionsBtn) {
-      click(actionsBtn);
-      await sleep(900);
-      let unf = [...document.querySelectorAll('[role="menuitem"], [role="button"], button')].find(isUnfollow);
-      if (!unf) {
-        await sleep(500);
-        unf = [...document.querySelectorAll('[role="menuitem"], [role="button"], button')].find(isUnfollow);
-      }
-      if (unf) {
-        click(unf);
-        await sleep(700);
-        const conf = [...document.querySelectorAll('[role="dialog"] button, [role="dialog"] [role="button"], button')].find(
-          isConfirm
-        );
-        if (conf) {
-          click(conf);
-          await sleep(500);
-        }
-        return "processed";
-      }
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      await sleep(200);
-    }
-
-    const followBtn =
-      isFollowing(card.btn) ? card.btn : [...card.node.querySelectorAll('[role="button"], button')].find(isFollowing);
-    if (followBtn) {
-      click(followBtn);
-      await sleep(900);
-      let unf = [...document.querySelectorAll('[role="menuitem"], [role="button"], button')].find(isUnfollow);
-      if (!unf) {
-        await sleep(500);
-        unf = [...document.querySelectorAll('[role="menuitem"], [role="button"], button')].find(isUnfollow);
-      }
-      if (unf) {
-        click(unf);
-        await sleep(700);
-        const conf = [...document.querySelectorAll('[role="dialog"] button, [role="dialog"] [role="button"], button')].find(
-          isConfirm
-        );
-        if (conf) {
-          click(conf);
-          await sleep(500);
-        }
-        return "processed";
-      }
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      return "needs-review";
-    }
-
-    return "skipped";
+    return 'uncertain';
   }
 
   async function notify(done, total, status, message, finished = false) {
@@ -219,7 +172,7 @@
         count,
         message: count
           ? "Found visible account cards. Scroll the Following list to load more if needed."
-          : "No visible account cards found. Open the Following list and wait for it to load.",
+          : "No matching cards found. Open your Following list, wait for it to load, and check your browser language.",
       });
       return true;
     }
@@ -254,6 +207,7 @@
         let done = 0;
         let processed = 0;
         let uncertain = 0;
+        let skipped = 0;
         await notify(done, cards.length, "Running", `Starting with ${cards.length} visible accounts. Keep this tab open.`);
         for (const card of cards) {
           if (stopRequested) break;
@@ -264,6 +218,7 @@
             const result = await clickUnfollow(card);
             if (result === "processed") processed++;
             if (result === "uncertain" || result === "needs-review") uncertain++;
+            if (result === "skipped") skipped++;
           } catch {
             uncertain++;
           }
@@ -272,7 +227,7 @@
             done,
             cards.length,
             "Running",
-            `Checked ${done} of ${cards.length}. Processed: ${processed}; needs review: ${uncertain}.`
+            `Checked ${done} of ${cards.length}. Verified: ${processed}; needs review: ${uncertain}; skipped: ${skipped}.`
           );
           await sleep(1800 + Math.floor(Math.random() * 700));
         }
