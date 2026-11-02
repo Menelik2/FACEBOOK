@@ -21,3 +21,9 @@ A user-controlled Chrome extension for reviewing visible account cards in Facebo
 - `manifest.json` — Manifest V3 metadata
 - `popup.html`, `popup.css`, `popup.js` — popup and controls
 - `content.js` — page detection and user-initiated actions
+
+## Desktop Chrome and Android Chrome compatibility
+Desktop Chrome supports this Manifest V3 extension through **Load unpacked**. Standard Google Chrome for Android does **not** install Chrome extensions; downloading the ZIP on Android does not enable it. For Android Chrome, use Facebook's own Following controls manually. The desktop extension cannot be injected into Android Chrome from the website.
+
+## Verification and known limits
+The extension counts a verified unfollow only when the same visible profile card displays a **Follow**, **Like**, or **Subscribe** control after the action. Missing cards, unavailable menus, and uncertain state changes are reported as needing review rather than success. Facebook may render a different layout or language, so detection can return zero accounts. Test on an account you control and review each change. Do not interpret a finished run as proof that every followed account was removed.
