@@ -41,10 +41,13 @@
   function isActions(el) {
     if (!el || !visible(el)) return false;
     const a = el.getAttribute?.("aria-label") || "";
-    const t = (a + " " + (el.innerText || "")).toLowerCase();
+    const t = (a + " " + (el.innerText || "")).trim().toLowerCase();
     if (t.includes("actions") || t.includes("more options")) return true;
-    if (t === "more" || a === "More" || a === "…" || a === "..." || a === "•••") return true;
-    return false;
+    if (/^(more|…|\.\.\.|•••)$/.test(t)) return true;
+    const svg = el.querySelector?.("svg");
+    return Boolean(svg && /more|options|menu/i.test(
+      (svg.getAttribute("aria-label") || "") + " " + (el.getAttribute("title") || "")
+    ));
   }
 
   function isUnfollow(el) {
@@ -117,12 +120,7 @@
       for (let depth = 0; depth < 7 && node && node !== document.body; depth++, node = node.parentElement) {
         const buttons = [...node.querySelectorAll('button,[role="button"]')].filter(visible);
         const following = buttons.find(isFollowing);
-        const actions = buttons.find(isActions) || buttons.find((el) => {
-          const t = label(el).trim();
-          const svg = el.querySelector('svg');
-          return /^(?:\.\.\.|…|•••)$/.test(t) ||
-            (svg && /more|options|menu/i.test((svg.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')));
-        });
+        const actions = buttons.find(isActions);
         if (!following && !actions) continue;
         // Never attach a generic page-level menu to a profile.
         if (node.querySelectorAll('a[href]').length > 12) break;
@@ -159,7 +157,10 @@
     const action = [...document.querySelectorAll('[role="menu"],[role="dialog"],[role="listbox"]')]
       .filter(visible).flatMap(visibleButtons).find(isUnfollow) ||
       [...document.querySelectorAll('[role="menuitem"]')].filter(visible).find(isUnfollow);
-    if (!action) return 'needs-review';
+    if (!action) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      return 'needs-review';
+    }
     action.click();
     await sleep(600);
     const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(visible);
@@ -183,6 +184,10 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg.action === "STATUS") {
+      sendResponse({running, paused, stopped:stopRequested, count:getCards().length});
+      return true;
+    }
     if (msg.action === "SCAN") {
       const count = getCards().length;
       sendResponse({
@@ -214,11 +219,15 @@
         sendResponse({ ok: false, message: "A run is already active." });
         return true;
       }
+      const limit = Math.max(1, Math.min(20, Number(msg.limit) || 10));
+      const cards = getCards().slice(0, limit);
+      if (!cards.length) {
+        sendResponse({ok:false,message:'No matching account cards found. Open Friends → Following and try Scan again.'});
+        return true;
+      }
       running = true;
       stopRequested = false;
       paused = false;
-      const limit = Math.max(1, Math.min(20, Number(msg.limit) || 10));
-      const cards = getCards().slice(0, limit);
       sendResponse({ ok: true, count: cards.length });
       (async () => {
         let done = 0;
@@ -255,7 +264,7 @@
           done,
           cards.length,
           stopped ? "Stopped" : "Finished",
-          `${stopped ? "Stopped early. " : "Run complete. "}Processed: ${processed}; needs review: ${uncertain}. Verify on Facebook.`,
+          `${stopped ? "Stopped early. " : "Run complete. "}Verified: ${processed}; needs review: ${uncertain}; skipped: ${skipped}. Verify on Facebook.`,
           true
         );
       })();
