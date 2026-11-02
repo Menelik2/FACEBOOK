@@ -81,8 +81,19 @@
   }
 
   function isFollowingPage() {
-    return /\/(following|friends\/following)(?:\/|$)/i.test(location.pathname) ||
-      /following/i.test(document.querySelector('h1')?.innerText || '');
+    const route = location.pathname + location.search;
+    if (/\/(?:friends\/following|following)(?:\/|$|\?)/i.test(route)) return true;
+    if (/[?&]sk=following(?:&|$)/i.test(location.search)) return true;
+    return [...document.querySelectorAll('a,[role="tab"]')].some((el) => {
+      if (!visible(el)) return false;
+      const t = low(el);
+      const href = el.getAttribute('href') || '';
+      return /^following(?:\s|$)/i.test(t) &&
+        (el.getAttribute('aria-selected') === 'true' ||
+         el.getAttribute('aria-current') === 'page' ||
+         /(?:\/following|[?&]sk=following)/i.test(href) &&
+         el.querySelector('[aria-selected="true"]'));
+    });
   }
 
   function profileUrl(link) {
@@ -106,7 +117,12 @@
       for (let depth = 0; depth < 7 && node && node !== document.body; depth++, node = node.parentElement) {
         const buttons = [...node.querySelectorAll('button,[role="button"]')].filter(visible);
         const following = buttons.find(isFollowing);
-        const actions = buttons.find(isActions);
+        const actions = buttons.find(isActions) || buttons.find((el) => {
+          const t = label(el).trim();
+          const svg = el.querySelector('svg');
+          return /^(?:\.\.\.|…|•••)$/.test(t) ||
+            (svg && /more|options|menu/i.test((svg.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')));
+        });
         if (!following && !actions) continue;
         // Never attach a generic page-level menu to a profile.
         if (node.querySelectorAll('a[href]').length > 12) break;
@@ -141,7 +157,8 @@
     control.click();
     await sleep(650);
     const action = [...document.querySelectorAll('[role="menu"],[role="dialog"],[role="listbox"]')]
-      .filter(visible).flatMap(visibleButtons).find(isUnfollow);
+      .filter(visible).flatMap(visibleButtons).find(isUnfollow) ||
+      [...document.querySelectorAll('[role="menuitem"]')].filter(visible).find(isUnfollow);
     if (!action) return 'needs-review';
     action.click();
     await sleep(600);
